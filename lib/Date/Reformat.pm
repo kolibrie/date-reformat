@@ -1,48 +1,62 @@
 package Date::Reformat;
 
+=head1 NAME
+
+Date::Reformat - Rearrange date strings
+
+=head1 SYNOPSIS
+
+    use Date::Reformat;
+
+    my $parser = Date::Reformat->new(
+        parser => {
+            regex  => qr/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)$/,
+            params => [qw(year month day hour minute second)],
+        },
+        defaults => {
+            time_zone => 'America/New_York',
+        },
+        transformations => [
+            {
+                from    => 'year',
+                to      => 'century',
+                coderef => sub { int($_[0] / 100) },
+            },
+        ],
+        formatter => {
+            sprintf => '%s-%02d-%02dT%02d:%02d:02d %s',
+            params  => [qw(year month day hour minute second time_zone)],
+        },
+    );
+
+    my $parser = Date::Reformat->new(
+        parser => {
+            strptime => '%Y-%m-%dT%M:%H:%S',
+        },
+        defaults => {
+            time_zone => 'America/New_York',
+        },
+        formatter => {
+            strftime => '%Y-%m-%dT%M:%H:%S %Z',
+            # or data_structure => 'hashref' || 'hash' || 'arrayref' || 'array'
+            # or coderef => sub { my ($y, $m, $d) = @_; DateTime->new(year => $y, month => $m, day => $d) },
+            # params => [qw(year month day)],
+        },
+    );
+
+    my $reformatted_string = $parser->parse_date($date_string);
+
+=cut
+
 use 5.010000;
 use strict;
 use warnings;
 
-require Exporter;
-
-our @ISA = qw(Exporter);
-
-# Items to export into callers namespace by default. Note: do not export
-# names by default without a very good reason. Use EXPORT_OK instead.
-# Do not simply export all your public functions/methods/constants.
-
-# This allows declaration	use Date::Reformat ':all';
-# If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
-# will save memory.
-our %EXPORT_TAGS = ( 'all' => [ qw(
-	
-) ] );
-
-our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
-
-our @EXPORT = qw(
-	
-);
-
 our $VERSION = '0.01';
 
 
-# Preloaded methods go here.
-
 1;
 __END__
-# Below is stub documentation for your module. You'd better edit it!
-
-=head1 NAME
-
-Date::Reformat - Perl extension for blah blah blah
-
-=head1 SYNOPSIS
-
-  use Date::Reformat;
-  blah blah blah
-
 =head1 DESCRIPTION
 
 Stub documentation for Date::Reformat, created by h2xs. It looks like the
