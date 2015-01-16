@@ -54,6 +54,22 @@ my @TESTS = (
             'am_or_pm' => 'pm',
         },
     },
+
+    # Named captures.
+    {
+        'date_string' => '2015-01-14 21:07:31',
+        'parser' => {
+            'regex'  => qr/(?<year>\d{4})-(?<month>\d\d)-(?<day>\d\d) (?<hour>\d\d?):(?<minute>\d\d):(?<second>\d\d)/,
+        },
+        'expected' => {
+            'year'   => '2015',
+            'month'  => '01',
+            'day'    => '14',
+            'hour'   => '21',
+            'minute' => '07',
+            'second' => '31',
+        },
+    },
 );
 
 plan('tests' => scalar(@TESTS));

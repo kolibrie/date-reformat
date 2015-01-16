@@ -54,37 +54,151 @@ use warnings;
 
 our $VERSION = '0.01';
 
+=head1 DESCRIPTION
+
+This module aims to be a lightweight and flexible tool for rearranging
+components of a date string, then returning the components in the order
+and structure specified.
+
+=head2 METHODS
+
+=over 4
+
+=item new()
+
+=cut
+
+sub new {
+    my ($class, %args) = @_;
+    my $self = bless {}, $class;
+    foreach my $parameter (
+        'parser',
+    )
+    {
+        my $method = 'initialize_' . $parameter;
+        $self->$method($args{$parameter});
+    }
+    return $self;
+}
+
+=item initialize_parser()
+
+=cut
+
+sub initialize_parser {
+    my ($self, $definition) = @_;
+    # TODO: Verify $definition is a hashref with one of the approved parser parameters (regex, strptime, etc.).
+    if (defined($definition->{'regex'})) {
+        my $regex = $definition->{'regex'};
+
+        # Initialize the right kind of regex parser (simple capture or named capture).
+        if (defined($definition->{'params'})) {
+            return $self->initialize_parser_for_regex_with_params(
+                {
+                    'regex'  => $definition->{'regex'},
+                    'params' => $definition->{'params'},
+                }
+            );
+        }
+        return $self->initialize_parser_for_regex_named_capture(
+            {
+                'regex' => $definition->{'regex'},
+            },
+        );
+    }
+}
+
+=item initialize_parser_for_regex_with_params()
+
+=cut
+
+sub initialize_parser_for_regex_with_params {
+    my ($self, $definition) = @_;
+    my $regex = $definition->{'regex'};
+    my $params = $definition->{'params'};
+    my $success = $self->add_parser(
+        sub {
+            my ($date_string) = @_;
+            my (@components) = $date_string =~ $regex;
+            return if ! @components;
+            my %date = ();
+            @date{@$params} = @components;
+            # TODO: Add named capture values to %date.
+            return \%date;
+        },
+    );
+    return $success;
+}
+
+=item initialize_parser_for_regex_named_capture()
+
+=cut
+
+sub initialize_parser_for_regex_named_capture {
+    my ($self, $definition) = @_;
+    my $regex = $definition->{'regex'};
+    my $success = $self->add_parser(
+        sub {
+            my ($date_string) = @_;
+            my $success = $date_string =~ $regex;
+            return if ! $success;
+            my %date = %+;
+            return \%date;
+        },
+    );
+    return $success;
+}
+
+=item add_parser()
+
+=cut
+
+sub add_parser {
+    my ($self, $parser) = @_;
+    my $count = push @{ $self->{'active_parsers'} }, $parser;
+    return $count ? 1 : 0;
+}
+
+=item parse_date()
+
+=cut
+
+sub parse_date {
+    my ($self, $date_string) = @_;
+    foreach my $parser (@{ $self->{'active_parsers'} }) {
+        my $date = $parser->($date_string);
+        # TODO: Add formatting step here.
+        return $date if defined($date);
+    }
+    # None of the parsers were able to extract the date components.
+    return;
+}
+
+=back
+
+=cut
 
 1;
 __END__
-=head1 DESCRIPTION
-
-Stub documentation for Date::Reformat, created by h2xs. It looks like the
-author of the extension was negligent enough to leave the stub
-unedited.
-
-Blah blah blah.
-
-=head2 EXPORT
-
-None by default.
-
-
-
 =head1 SEE ALSO
 
-Mention other useful documentation such as the documentation of
-related modules or operating system documentation (such as man pages
-in UNIX), or any relevant external documentation such as RFCs or
-standards.
+=over 4
 
-If you have a mailing list set up for your module, mention it here.
+=item Date::Transform
 
-If you have a web site set up for your module, mention it here.
+=item Date::Parser
+
+=item Date::Format
+
+=item DateTime::Format::Flexible
+
+=item DateTime::Format::Builder
+
+=back
 
 =head1 AUTHOR
 
-Nathan Gray, E<lt>kolibrie@E<gt>
+Nathan Gray E<lt>kolibrie@cpan.orgE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
