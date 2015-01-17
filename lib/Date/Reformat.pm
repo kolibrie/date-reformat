@@ -69,6 +69,11 @@ my $TOKENS = {
         'regex'   => q/(?<month>\d\d?)/,
         'sprintf' => '%02d',
     },
+    'month_no_padding' => {
+        'regex'   => q/(?<month>\d\d?)/,
+        'sprintf' => '%d',
+        'storage' => 'month',
+    },
     'day' => {
         'regex'   => q/(?<day>\d\d?)/,
         'sprintf' => '%02d',
@@ -157,6 +162,17 @@ my $STRPTIME_POSTPROCESS = [
     },
 ];
 
+my $STRFTIME_POSTPROCESS = [
+    {
+        'token'       => '%n',
+        'replacement' => "\n",
+    },
+    {
+        'token'       => '%t',
+        'replacement' => "\t",
+    },
+];
+
 my $DEFAULT_STRPTIME_MAPPINGS = {
     '%A' => 'day_name', # TODO
     '%a' => 'day_abbr',
@@ -175,6 +191,7 @@ my $DEFAULT_STRPTIME_MAPPINGS = {
     '%l' => 'hour_12', # TODO: This one is space-padded.
     '%M' => 'minute',
     '%m' => 'month',
+    '%-m' => 'month_no_padding',
     '%N' => 'fractional_seconds', # TODO
     '%P' => 'am_or_pm',
     '%p' => 'am_or_pm', # TODO: This is uppercase.
@@ -191,6 +208,9 @@ my $DEFAULT_STRPTIME_MAPPINGS = {
     '%z' => 'time_zone_offset', # TODO
 };
 
+my $DEFAULT_STRFTIME_MAPPINGS = {
+};
+
 =head2 METHODS
 
 =over 4
@@ -203,6 +223,7 @@ sub new {
     my ($class, %args) = @_;
     my $self = bless {}, $class;
     foreach my $parameter (
+        'debug',
         'parser',
         'formatter',
     )
@@ -267,8 +288,25 @@ sub initialize_formatter {
         );
     }
 
+    if (defined($definition->{'strftime'})) {
+        return $self->initialize_formatter_for_strftime(
+            {
+                'strftime' => $definition->{'strftime'},
+            },
+        );
+    }
+
     # Nothing initialized.
     return;
+}
+
+=item initialize_debug()
+
+=cut
+
+sub initialize_debug {
+    my ($self, $value) = @_;
+    return $self->{'debug'} = $value // 0;
 }
 
 =item initialize_parser_for_regex_with_params()
@@ -335,16 +373,14 @@ sub initialize_parser_for_strptime {
     $format =~ s/%\\\{([^\}]+)\\\}/%{$1}/g;
 
     # Replace expanded tokens: %{year}
-    # regex from DateTime
     $format =~
         s/
-            (%{\w+})
+            %{(\w+)}
         /
-            $TOKENS->{$1} ? $TOKENS->{$1}->{'regex'} : "\%$1"
+            $TOKENS->{$1} ? $TOKENS->{$1}->{'regex'} : "\%{$1}"
         /sgex;
 
     # Replace single character tokens: %Y
-    # regex from Date::Format
     $format =~
         s/
             (%[%a-zA-Z])
@@ -388,6 +424,65 @@ sub initialize_formatter_for_sprintf {
     return $success;
 }
 
+=item initialize_formatter_for_strftime()
+
+=cut
+
+sub initialize_formatter_for_strftime {
+    my ($self, $definition) = @_;
+    my $strftime = $definition->{'strftime'};
+    my $format = $strftime;
+    my $params = [];
+
+    # Preprocess some tokens that expand into other tokens.
+    foreach my $preprocess (@$STRPTIME_PREPROCESS) {
+        $format =~ s/$preprocess->{'token'}/$preprocess->{'replacement'}/g;
+    }
+
+    # Replace single character tokens with expanded tokens: %Y -> %{year}
+    $format =~
+        s/
+            (%[-_^]?[%a-zA-Z])
+        /
+            $self->strftime_token_to_internal($1)
+        /sgex;
+
+    # Find all tokens.
+    my @tokens = $format =~ m/(%{\w+})/g;
+
+    # Replace tokens in order, and build $params list.
+    foreach my $token (@tokens) {
+        # Replace expanded tokens: %{year}
+        if ($token =~ m/%{(\w+)}/) {
+            my $internal = $1;
+            my $sprintf = $TOKENS->{$internal}->{'sprintf'} //
+                die "Unable to find sprintf definition for token '$internal'";
+
+            say "Internal token $internal maps to sprintf token '$sprintf'." if $self->{'debug'};
+            $format =~ s/\Q$token\E/$sprintf/;
+            my $alias;
+            if (defined($TOKENS->{$internal}->{'storage'})) {
+                $alias = $TOKENS->{$internal}->{'storage'};
+            }
+            push @$params, ($alias // $internal);
+        }
+    }
+
+    # Postprocess some tokens that expand into special characters.
+    foreach my $postprocess (@$STRFTIME_POSTPROCESS) {
+        $format =~ s/$postprocess->{'token'}/$postprocess->{'replacement'}/g;
+    }
+
+    say "Crafted sprintf: $strftime -> $format [" . join(', ', @$params) . "]" if $self->{'debug'};
+    my $success = $self->initialize_formatter_for_sprintf(
+        {
+            'sprintf' => $format,
+            'params'  => $params,
+        },
+    );
+    return $success;
+}
+
 =item strptime_token_to_regex()
 
 =cut
@@ -414,6 +509,40 @@ sub strptime_token_to_regex {
     say "Strptime token $token maps to internal token '$internal'." if $self->{'debug'};
 
     return $TOKENS->{$internal}->{'regex'};
+}
+
+=item strftime_token_to_internal
+
+=cut
+
+sub strftime_token_to_internal {
+    my ($self, $token) = @_;
+    my $internal;
+    say "Attempting to convert strftime token $token into an internal token." if $self->{'debug'};
+    if (defined($self->{'strftime_mappings'}->{$token})) {
+        $internal = $self->{'strftime_mappings'}->{$token};
+    }
+    if (defined($self->{'strptime_mappings'}->{$token})) {
+        $internal = $self->{'strptime_mappings'}->{$token};
+    }
+    elsif (defined($DEFAULT_STRFTIME_MAPPINGS->{$token})) {
+        $internal = $DEFAULT_STRFTIME_MAPPINGS->{$token};
+    }
+    elsif (defined($DEFAULT_STRPTIME_MAPPINGS->{$token})) {
+        $internal = $DEFAULT_STRPTIME_MAPPINGS->{$token};
+    }
+
+    if (! defined($internal)) {
+        say "No mapping found" if $self->{'debug'};
+        return '%' . $token;  # Perform no substitution, but escape token for sprintf.
+    }
+
+    if (! defined($TOKENS->{$internal}->{'sprintf'})) {
+        die "Unable to find sprintf definition for token '$internal'";
+    }
+    say "Strftime token $token maps to internal token '$internal'." if $self->{'debug'};
+
+    return '%{' . $internal . '}';
 }
 
 =item add_parser()
