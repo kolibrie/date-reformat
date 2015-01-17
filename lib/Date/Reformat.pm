@@ -63,7 +63,7 @@ our $VERSION = '0.01';
 my $TOKENS = {
     'year' => {
         'regex'   => q/(?<year>\d{4})/,
-        'sprintf' => '%s',
+        'sprintf' => '%04d',
     },
     'month' => {
         'regex'   => q/(?<month>\d\d?)/,
@@ -204,6 +204,7 @@ sub new {
     my $self = bless {}, $class;
     foreach my $parameter (
         'parser',
+        'formatter',
     )
     {
         my $method = 'initialize_' . $parameter;
@@ -245,6 +246,29 @@ sub initialize_parser {
             },
         );
     }
+
+    # Nothing initialized.
+    return;
+}
+
+=item initialize_formatter()
+
+=cut
+
+sub initialize_formatter {
+    my ($self, $definition) = @_;
+    # TODO: Verify $definition is a hashref with one of the approved formatter parameters (sprintf, strftime, etc.).
+    if (defined($definition->{'sprintf'})) {
+        return $self->initialize_formatter_for_sprintf(
+            {
+                'sprintf' => $definition->{'sprintf'},
+                'params'  => $definition->{'params'},
+            },
+        );
+    }
+
+    # Nothing initialized.
+    return;
 }
 
 =item initialize_parser_for_regex_with_params()
@@ -315,7 +339,7 @@ sub initialize_parser_for_strptime {
     $format =~
         s/
             (%{\w+})
-        / 
+        /
             $TOKENS->{$1} ? $TOKENS->{$1}->{'regex'} : "\%$1"
         /sgex;
 
@@ -337,6 +361,28 @@ sub initialize_parser_for_strptime {
     my $success = $self->initialize_parser_for_regex_named_capture(
         {
             'regex' => qr/$format/,
+        },
+    );
+    return $success;
+}
+
+=item initialize_formatter_for_sprintf()
+
+=cut
+
+sub initialize_formatter_for_sprintf {
+    my ($self, $definition) = @_;
+    my $sprintf = $definition->{'sprintf'};
+    my $params = $definition->{'params'} // die "Unable to create sprintf formatter: No 'params' argument defined.";
+    # TODO: Validate parameters.
+    my $success = $self->add_formatter(
+        sub {
+            my ($date) = @_;
+            my $formatted = sprintf(
+                $sprintf,
+                map { $_ // '' } @{$date}{@$params},
+            );
+            return $formatted;
         },
     );
     return $success;
@@ -380,6 +426,16 @@ sub add_parser {
     return $count ? 1 : 0;
 }
 
+=item add_formatter()
+
+=cut
+
+sub add_formatter {
+    my ($self, $formatter) = @_;
+    my $count = push @{ $self->{'active_formatters'} }, $formatter;
+    return $count ? 1 : 0;
+}
+
 =item parse_date()
 
 =cut
@@ -393,6 +449,19 @@ sub parse_date {
     }
     # None of the parsers were able to extract the date components.
     return;
+}
+
+=item format_date()
+
+=cut
+
+sub format_date {
+    my ($self, $date) = @_;
+    my $formatted = $date;
+    foreach my $formatter (@{ $self->{'active_formatters'} }) {
+        $formatted = $formatter->($formatted);
+    }
+    return $formatted;
 }
 
 =back
