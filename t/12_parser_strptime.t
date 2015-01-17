@@ -51,6 +51,22 @@ my @TESTS = (
             'am_or_pm' => 'pm',
         },
     },
+
+    # Test expansion and special characters
+    {
+        'date_string' => '2015-01-14 T% 21:07:31',
+        'parser' => {
+            'strptime' => '%F%tT%%%n%T',
+        },
+        'expected' => {
+            'year'   => '2015',
+            'month'  => '01',
+            'day'    => '14',
+            'hour'   => '21',
+            'minute' => '07',
+            'second' => '31',
+        },
+    },
 );
 
 plan('tests' => scalar(@TESTS));

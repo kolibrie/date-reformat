@@ -46,6 +46,12 @@ Date::Reformat - Rearrange date strings
 
     my $reformatted_string = $parser->parse_date($date_string);
 
+=head1 DESCRIPTION
+
+This module aims to be a lightweight and flexible tool for rearranging
+components of a date string, then returning the components in the order
+and structure specified.
+
 =cut
 
 use 5.010000;
@@ -54,11 +60,136 @@ use warnings;
 
 our $VERSION = '0.01';
 
-=head1 DESCRIPTION
+my $TOKENS = {
+    'year' => {
+        'regex'   => q/(?<year>\d{4})/,
+        'sprintf' => '%s',
+    },
+    'month' => {
+        'regex'   => q/(?<month>\d\d?)/,
+        'sprintf' => '%02d',
+    },
+    'day' => {
+        'regex'   => q/(?<day>\d\d?)/,
+        'sprintf' => '%02d',
+    },
+    'hour' => {
+        'regex'   => q/(?<hour>\d\d?)/,
+        'sprintf' => '%02d',
+    },
+    'minute' => {
+        'regex'   => q/(?<minute>\d\d?)/,
+        'sprintf' => '%02d',
+    },
+    'second' => {
+        'regex'   => q/(?<second>\d\d?)/,
+        'sprintf' => '%02d',
+    },
+    'day_abbr' => {
+        'regex'   => q/(?<day_abbr>Mon|Tues?|Wed|Thur?|Fri|Sat|Sun)/,
+        'sprintf' => '%s',
+    },
+    'month_abbr' => {
+        'regex'   => q/(?<month_abbr>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/,
+        'sprintf' => '%s',
+    },
+    'am_or_pm' => {
+        'regex'   => q/(?<am_or_pm>(?)[ap]\.?m\.?)/,
+        'sprintf' => '%s',
+    },
+    'hour_12' => {
+        'regex'   => q/(?<hour_12>\d\d?)/,
+        'sprintf' => '%d',
+    },
+    'time_zone' => {
+        'regex'   => q|(?<time_zone>\w+(?:/\w+))|,
+        'sprintf' => '%s',
+    },
+};
 
-This module aims to be a lightweight and flexible tool for rearranging
-components of a date string, then returning the components in the order
-and structure specified.
+my $STRPTIME_PREPROCESS = [
+    {
+        'token'       => '%c',
+        'replacement' => '%c', # TODO: Perhaps use Scalar::Defer, and look up locale datetime format only if needed.
+    },
+    {
+        'token'       => '%D',
+        'replacement' => '%m/%d/%y',
+    },
+    {
+        'token'       => '%F',
+        'replacement' => '%Y-%m-%d',
+    },
+    {
+        'token'       => '%R',
+        'replacement' => '%H:%M',
+    },
+    {
+        'token'       => '%r',
+        'replacement' => '%I:%M:%S %p', # TODO: This may be affected by locale.
+    },
+    {
+        'token'       => '%T',
+        'replacement' => '%H:%M:%S',
+    },
+    {
+        'token'       => '%X',
+        'replacement' => '%X', # TODO: Perhaps use Scalar::Defer, and look up locale time format only if needed.
+    },
+    {
+        'token'       => '%x',
+        'replacement' => '%x', # TODO: Perhaps use Scalar::Defer, and look up locale date format only if needed.
+    },
+];
+
+my $STRPTIME_POSTPROCESS = [
+    {
+        'token'       => '%n',
+        'replacement' => '\s+',
+    },
+    {
+        'token'       => '%t',
+        'replacement' => '\s+',
+    },
+    {
+        'token'       => '%%',
+        'replacement' => quotemeta('%'),
+    },
+];
+
+my $DEFAULT_STRPTIME_MAPPINGS = {
+    '%A' => 'day_name', # TODO
+    '%a' => 'day_abbr',
+    '%B' => 'month_name', # TODO
+    '%b' => 'month_abbr',
+    '%C' => 'century', # TODO
+    '%d' => 'day',
+    '%e' => 'day', # TODO: This one is space-padded.
+    '%G' => 'week_year', # TODO
+    '%g' => 'week_year_abbr', # TODO
+    '%H' => 'hour',
+    '%h' => 'month_abbr',
+    '%I' => 'hour_12',
+    '%j' => 'day_of_year', # TODO
+    '%k' => 'hour', # TODO: This one is space-padded.
+    '%l' => 'hour_12', # TODO: This one is space-padded.
+    '%M' => 'minute',
+    '%m' => 'month',
+    '%N' => 'fractional_seconds', # TODO
+    '%P' => 'am_or_pm',
+    '%p' => 'am_or_pm', # TODO: This is uppercase.
+    '%S' => 'second',
+    '%s' => 'epoch', # TODO
+    '%U' => 'week_number_0', # TODO
+    '%u' => 'day_of_week', # TODO
+    '%V' => 'week_number', # TODO
+    '%W' => 'week_number_1', # TODO
+    '%w' => 'day_of_week_0', # TODO
+    '%Y' => 'year',
+    '%y' => 'year_abbr', # TODO
+    '%Z' => 'time_zone', # TODO
+    '%z' => 'time_zone_offset', # TODO
+};
 
 =head2 METHODS
 
@@ -89,7 +220,6 @@ sub initialize_parser {
     my ($self, $definition) = @_;
     # TODO: Verify $definition is a hashref with one of the approved parser parameters (regex, strptime, etc.).
     if (defined($definition->{'regex'})) {
-        my $regex = $definition->{'regex'};
 
         # Initialize the right kind of regex parser (simple capture or named capture).
         if (defined($definition->{'params'})) {
@@ -103,6 +233,15 @@ sub initialize_parser {
         return $self->initialize_parser_for_regex_named_capture(
             {
                 'regex' => $definition->{'regex'},
+            },
+        );
+
+    }
+
+    if (defined($definition->{'strptime'})) {
+        return $self->initialize_parser_for_strptime(
+            {
+                'strptime' => $definition->{'strptime'},
             },
         );
     }
@@ -147,6 +286,88 @@ sub initialize_parser_for_regex_named_capture {
         },
     );
     return $success;
+}
+
+=item initialize_parser_for_strptime()
+
+=cut
+
+sub initialize_parser_for_strptime {
+    my ($self, $definition) = @_;
+    my $strptime = $definition->{'strptime'};
+    my $format = $strptime;
+
+    # Preprocess some tokens that expand into other tokens.
+    foreach my $preprocess (@$STRPTIME_PREPROCESS) {
+        $format =~ s/$preprocess->{'token'}/$preprocess->{'replacement'}/g;
+    }
+
+    # Escape everything in the strptime string so we can turn it into a regex.
+    $format = quotemeta($format);
+
+    # Unescape the parts that we will replace as tokens.
+    # regex from DateTime::Format::Strptime
+    $format =~ s/(?<!\\)\\%/%/g;
+    $format =~ s/%\\\{([^\}]+)\\\}/%{$1}/g;
+
+    # Replace expanded tokens: %{year}
+    # regex from DateTime
+    $format =~
+        s/
+            (%{\w+})
+        / 
+            $TOKENS->{$1} ? $TOKENS->{$1}->{'regex'} : "\%$1"
+        /sgex;
+
+    # Replace single character tokens: %Y
+    # regex from Date::Format
+    $format =~
+        s/
+            (%[%a-zA-Z])
+        /
+            $self->strptime_token_to_regex($1)
+        /sgex;
+
+    # Postprocess some tokens that expand into special characters.
+    foreach my $postprocess (@$STRPTIME_POSTPROCESS) {
+        $format =~ s/$postprocess->{'token'}/$postprocess->{'replacement'}/g;
+    }
+
+    say "Crafted regex: $strptime -> $format" if $self->{'debug'};
+    my $success = $self->initialize_parser_for_regex_named_capture(
+        {
+            'regex' => qr/$format/,
+        },
+    );
+    return $success;
+}
+
+=item strptime_token_to_regex()
+
+=cut
+
+sub strptime_token_to_regex {
+    my ($self, $token) = @_;
+    my $internal;
+    say "Attempting to convert strptime token $token into a regex." if $self->{'debug'};
+    if (defined($self->{'strptime_mappings'}->{$token})) {
+        $internal = $self->{'strptime_mappings'}->{$token};
+    }
+    elsif (defined($DEFAULT_STRPTIME_MAPPINGS->{$token})) {
+        $internal = $DEFAULT_STRPTIME_MAPPINGS->{$token};
+    }
+
+    if (! defined($internal)) {
+        say "No mapping found" if $self->{'debug'};
+        return $token;  # Perform no substitution.
+    }
+
+    if (! defined($TOKENS->{$internal}->{'regex'})) {
+        die "Unable to find regex definition for token '$internal'";
+    }
+    say "Strptime token $token maps to internal token '$internal'." if $self->{'debug'};
+
+    return $TOKENS->{$internal}->{'regex'};
 }
 
 =item add_parser()
