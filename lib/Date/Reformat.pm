@@ -226,6 +226,7 @@ sub new {
         'debug',
         'parser',
         'formatter',
+        'defaults',
     )
     {
         my $method = 'initialize_' . $parameter;
@@ -298,6 +299,16 @@ sub initialize_formatter {
 
     # Nothing initialized.
     return;
+}
+
+=item initialize_defaults()
+
+=cut
+
+sub initialize_defaults {
+    my ($self, $args) = @_;
+    # TODO: Verify $args is a hashref.
+    return $self->{'defaults'} = $args // {};
 }
 
 =item initialize_debug()
@@ -416,7 +427,7 @@ sub initialize_formatter_for_sprintf {
             my ($date) = @_;
             my $formatted = sprintf(
                 $sprintf,
-                map { $_ // '' } @{$date}{@$params},
+                map { $date->{$_} // $self->{'defaults'}->{$_} // '' } @$params,
             );
             return $formatted;
         },
