@@ -1,0 +1,182 @@
+=head1 NAME
+
+Date::Reformat - Rearrange date strings
+
+=head1 SYNOPSIS
+
+    use Date::Reformat;
+
+    my $parser = Date::Reformat->new(
+        parser => {
+            regex  => qr/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)$/,
+            params => [qw(year month day hour minute second)],
+        },
+        defaults => {
+            time_zone => 'America/New_York',
+        },
+        transformations => [
+            {
+                from    => 'year',
+                to      => 'century',
+                coderef => sub { int($_[0] / 100) },
+            },
+        ],
+        formatter => {
+            sprintf => '%s-%02d-%02dT%02d:%02d:02d %s',
+            params  => [qw(year month day hour minute second time_zone)],
+        },
+    );
+
+    my $parser = Date::Reformat->new(
+        parser => {
+            strptime => '%Y-%m-%dT%M:%H:%S',
+            # or heuristic => 'ymd', # http://www.postgresql.org/docs/9.2/static/datetime-input-rules.html
+        },
+        defaults => {
+            time_zone => 'America/New_York',
+        },
+        formatter => {
+            strftime => '%Y-%m-%dT%M:%H:%S %Z',
+            # or data_structure => 'hashref' || 'hash' || 'arrayref' || 'array'
+            # or coderef => sub { my ($y, $m, $d) = @_; DateTime->new(year => $y, month => $m, day => $d) },
+            # params => [qw(year month day)],
+        },
+    );
+
+    my $reformatted_string = $parser->reformat_date($date_string);
+
+=head1 DESCRIPTION
+
+This module aims to be a lightweight and flexible tool for rearranging
+components of a date string, then returning the components in the order
+and structure specified.
+
+
+=cut
+
+=head2 METHODS
+
+=over 4
+
+=item new()
+
+
+=cut
+
+=item initialize_parser()
+
+
+=cut
+
+=item initialize_formatter()
+
+
+=cut
+
+=item initialize_defaults()
+
+
+=cut
+
+=item initialize_debug()
+
+
+=cut
+
+=item initialize_parser_for_regex_with_params()
+
+
+=cut
+
+=item initialize_parser_for_regex_named_capture()
+
+
+=cut
+
+=item initialize_parser_for_strptime()
+
+
+=cut
+
+=item initialize_formatter_for_sprintf()
+
+
+=cut
+
+=item initialize_formatter_for_strftime()
+
+
+=cut
+
+=item strptime_token_to_regex()
+
+
+=cut
+
+=item strftime_token_to_internal
+
+
+=cut
+
+=item add_parser()
+
+
+=cut
+
+=item add_formatter()
+
+
+=cut
+
+=item parse_date()
+
+
+=cut
+
+=item format_date()
+
+
+=cut
+
+=item reformat_date()
+
+
+=cut
+
+=back
+
+
+=cut
+
+=head1 SEE ALSO
+
+=over 4
+
+=item Date::Transform
+
+=item Date::Parser
+
+=item Date::Format
+
+=item DateTime::Format::Flexible
+
+=item DateTime::Format::Builder
+
+=back
+
+=head1 AUTHOR
+
+Nathan Gray E<lt>kolibrie@cpan.orgE<gt>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2015 by Nathan Gray
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.14.2 or,
+at your option, any later version of Perl 5 you may have available.
+
+
+
+=cut
+

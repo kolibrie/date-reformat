@@ -44,7 +44,7 @@ Date::Reformat - Rearrange date strings
         },
     );
 
-    my $reformatted_string = $parser->parse_date($date_string);
+    my $reformatted_string = $parser->reformat_date($date_string);
 
 =head1 DESCRIPTION
 
