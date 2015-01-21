@@ -226,6 +226,7 @@ sub new {
         'debug',
         'parser',
         'formatter',
+        'transformations',
         'defaults',
     )
     {
@@ -299,6 +300,21 @@ sub initialize_formatter {
 
     # Nothing initialized.
     return;
+}
+
+=item initialize_transformations()
+
+=cut
+
+sub initialize_transformations {
+    my ($self, $transformations) = @_;
+    # TODO: Verify $transformations is an arrayref.
+    my $count = 0;
+    foreach my $t (@$transformations) {
+        $self->{'transformations'}->{$t->{'to'}}->{$t->{'from'}} = $t->{'transformation'};
+        $count++;
+    }
+    return $count;
 }
 
 =item initialize_defaults()
@@ -427,7 +443,24 @@ sub initialize_formatter_for_sprintf {
             my ($date) = @_;
             my $formatted = sprintf(
                 $sprintf,
-                map { $date->{$_} // $self->{'defaults'}->{$_} // '' } @$params,
+                map
+                {
+                    # Use the value, if available.
+                    $date->{$_}
+                    //
+                    # Or see if we can determine the value by transforming another field.
+                    $self->transform_token_value(
+                        'target_token' => $_,
+                        'date'         => $date,
+                    )
+                    //
+                    # Or see if there is a default value for the field.
+                    $self->{'defaults'}->{$_}
+                    //
+                    # Or just use a value of empty string.
+                    ''
+                }
+                @$params,
             );
             return $formatted;
         },
@@ -554,6 +587,31 @@ sub strftime_token_to_internal {
     say "Strftime token $token maps to internal token '$internal'." if $self->{'debug'};
 
     return '%{' . $internal . '}';
+}
+
+=item transform_token_value()
+
+=cut
+
+sub transform_token_value {
+    my ($self, %args) = @_;
+    my $target_token = $args{'target_token'};
+    my $date = $args{'date'};
+
+    # Return the value, if it is already set.
+    return $date->{$target_token} if defined($date->{$target_token});
+
+    # Abort if we have no transformations defined for this target.
+    return if ! defined($self->{'transformations'}->{$target_token});
+
+    # Look up transformations to $target_token from a field that is defined in $date.
+    foreach my $source_token (keys %{$self->{'transformations'}->{$target_token}}) {
+        if (defined($date->{$source_token}) && defined($self->{'transformations'}->{$target_token}->{$source_token})) {
+            # Run the transformation and return the value.
+            return $self->{'transformations'}->{$target_token}->{$source_token}->($date);
+        }
+    }
+    return;
 }
 
 =item add_parser()
