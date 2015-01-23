@@ -60,6 +60,17 @@ use warnings;
 
 our $VERSION = '0.01';
 
+my $MONTH_LOOKUP = {
+};
+{
+    # Lookups for month abbreviations.
+    my $c = 0;
+    foreach my $abbr (qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)) {
+        $MONTH_LOOKUP->{'abbr'}->{lc($abbr)} = ++$c;
+        $MONTH_LOOKUP->{'number'}->{$c}->{'abbr'} = $abbr;
+    }
+}
+
 my $TOKENS = {
     'year' => {
         'regex'   => q/(?<year>\d{4})/,
@@ -209,6 +220,64 @@ my $DEFAULT_STRPTIME_MAPPINGS = {
 };
 
 my $DEFAULT_STRFTIME_MAPPINGS = {
+};
+
+my $DEFAULT_TRANSFORMATIONS = {
+    # to => {
+    #   from => \&transformation_coderef,
+    # },
+    'month' => {
+        'month_abbr' => sub {
+            my ($date) = @_;
+            return $date->{'month'} if defined($date->{'month'});
+            return $MONTH_LOOKUP->{'abbr'}->{ lc($date->{'month_abbr'}) } // undef;
+        },
+    },
+    'month_abbr' => {
+        'month' => sub {
+            my ($date) = @_;
+            return $date->{'month_abbr'} if defined($date->{'month_abbr'});
+            return $MONTH_LOOKUP->{'number'}->{ $date->{'month'}+0 }->{'abbr'} // undef;
+        },
+    },
+    'hour' => {
+        'hour_12' => sub {
+            my ($date) = @_;
+            return $date->{'hour'} if defined($date->{'hour'});
+            if (lc($date->{'am_or_pm'}) eq 'pm') {
+                return $date->{'hour_12'} == 12
+                    ? $date->{'hour_12'}
+                    : $date->{'hour_12'} + 12;
+            }
+            return $date->{'hour_12'} == 12
+                ? 0
+                : $date->{'hour_12'};
+        },
+    },
+    'hour_12' => {
+        'hour' => sub {
+            my ($date) = @_;
+            return $date->{'hour_12'} if defined($date->{'hour_12'});
+            if ($date->{'hour'} == 0) {
+                return 12;
+            }
+            return $date->{'hour'} < 13
+                ? $date->{'hour'}
+                : $date->{'hour'} - 12;
+        },
+    },
+    'am_or_pm' => {
+        'hour' => sub {
+            my ($date) = @_;
+            return $date->{'am_or_pm'} if defined($date->{'am_or_pm'});
+            if ($date->{'hour'} == 0) {
+                return 'am';
+            }
+            return $date->{'hour'} >= 12
+                ? 'pm'
+                : 'am';
+        },
+    },
 };
 
 =head2 METHODS
@@ -601,16 +670,18 @@ sub transform_token_value {
     # Return the value, if it is already set.
     return $date->{$target_token} if defined($date->{$target_token});
 
-    # Abort if we have no transformations defined for this target.
-    return if ! defined($self->{'transformations'}->{$target_token});
-
-    # Look up transformations to $target_token from a field that is defined in $date.
-    foreach my $source_token (keys %{$self->{'transformations'}->{$target_token}}) {
-        if (defined($date->{$source_token}) && defined($self->{'transformations'}->{$target_token}->{$source_token})) {
-            # Run the transformation and return the value.
-            return $self->{'transformations'}->{$target_token}->{$source_token}->($date);
+    foreach my $transformations ($self->{'transformations'}, $DEFAULT_TRANSFORMATIONS) {
+        # Look up transformations to $target_token from a field that is defined in $date.
+        if (defined($transformations->{$target_token})) {
+            foreach my $source_token (keys %{$transformations->{$target_token}}) {
+                if (defined($date->{$source_token}) && defined($transformations->{$target_token}->{$source_token})) {
+                    # Run the transformation and return the value.
+                    return $transformations->{$target_token}->{$source_token}->($date);
+                }
+            }
         }
     }
+
     return;
 }
 
@@ -661,6 +732,17 @@ sub format_date {
     }
     return $formatted;
 }
+
+=item reformat_date()
+
+=cut
+
+sub reformat_date {
+    my ($self, $date_string) = @_;
+    my $date = $self->parse_date($date_string);
+    my $formatted = $self->format_date($date);
+    return $formatted;
+};
 
 =back
 
