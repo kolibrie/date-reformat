@@ -73,6 +73,11 @@ and structure specified.
 
 =cut
 
+=item initialize_transformations()
+
+
+=cut
+
 =item initialize_defaults()
 
 
@@ -98,6 +103,11 @@ and structure specified.
 
 =cut
 
+=item initialize_parser_heuristic()
+
+
+=cut
+
 =item initialize_formatter_for_sprintf()
 
 
@@ -114,6 +124,11 @@ and structure specified.
 =cut
 
 =item strftime_token_to_internal
+
+
+=cut
+
+=item transform_token_value()
 
 
 =cut

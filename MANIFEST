@@ -17,7 +17,9 @@ README.pod
 t/00_compile.t
 t/10_parser_regex.t
 t/12_parser_strptime.t
+t/18_parser_heuristic.t
 t/20_formatter_sprintf.t
 t/22_formatter_strftime.t
 t/30_defaults.t
 t/40_transformations.t
+t/50_reformat.t
