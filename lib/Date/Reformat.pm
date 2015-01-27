@@ -32,6 +32,7 @@ Date::Reformat - Rearrange date strings
     my $parser = Date::Reformat->new(
         parser => {
             strptime => '%Y-%m-%dT%M:%H:%S',
+            # or heuristic => 'ymd', # http://www.postgresql.org/docs/9.2/static/datetime-input-rules.html
         },
         defaults => {
             time_zone => 'America/New_York',
@@ -76,6 +77,10 @@ my $TOKENS = {
         'regex'   => q/(?<year>\d{4})/,
         'sprintf' => '%04d',
     },
+    'year_abbr' => {
+        'regex'   => q/(?<year>\d{2})/,
+        'sprintf' => '%02d',
+    },
     'month' => {
         'regex'   => q/(?<month>\d\d?)/,
         'sprintf' => '%02d',
@@ -85,40 +90,56 @@ my $TOKENS = {
         'sprintf' => '%d',
         'storage' => 'month',
     },
-    'day' => {
-        'regex'   => q/(?<day>\d\d?)/,
-        'sprintf' => '%02d',
-    },
-    'hour' => {
-        'regex'   => q/(?<hour>\d\d?)/,
-        'sprintf' => '%02d',
-    },
-    'minute' => {
-        'regex'   => q/(?<minute>\d\d?)/,
-        'sprintf' => '%02d',
-    },
-    'second' => {
-        'regex'   => q/(?<second>\d\d?)/,
-        'sprintf' => '%02d',
-    },
-    'day_abbr' => {
-        'regex'   => q/(?<day_abbr>Mon|Tues?|Wed|Thur?|Fri|Sat|Sun)/,
+    'month_name' => {
+        'regex'   => q/(?<month_name>January|February|March|April|May|June|July|August|September|October|November|December)/,
         'sprintf' => '%s',
     },
     'month_abbr' => {
         'regex'   => q/(?<month_abbr>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/,
         'sprintf' => '%s',
     },
-    'am_or_pm' => {
-        'regex'   => q/(?<am_or_pm>(?)[ap]\.?m\.?)/,
+    'day' => {
+        'regex'   => q/(?<day>\d\d?)/,
+        'sprintf' => '%02d',
+    },
+    'day_name' => {
+        'regex'   => q/(?<day_name>Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/,
         'sprintf' => '%s',
+    },
+    'day_abbr' => {
+        'regex'   => q/(?<day_abbr>Mon|Tues?|Wed|Thur?|Fri|Sat|Sun)/,
+        'sprintf' => '%s',
+    },
+    'day_of_year' => {
+        'regex'   => q/(?<day_of_year>\d\d?\d?)/,
+        'sprintf' => '%03d',
+    },
+    'hour' => {
+        'regex'   => q/(?<hour>\d\d?)/,
+        'sprintf' => '%02d',
     },
     'hour_12' => {
         'regex'   => q/(?<hour_12>\d\d?)/,
         'sprintf' => '%d',
     },
+    'minute' => {
+        'regex'   => q/(?<minute>\d\d)/,
+        'sprintf' => '%02d',
+    },
+    'second' => {
+        'regex'   => q/(?<second>\d\d)/,
+        'sprintf' => '%02d',
+    },
+    'am_or_pm' => {
+        'regex'   => q/(?<am_or_pm>(?i)[ap]\.?m\.?)/,
+        'sprintf' => '%s',
+    },
     'time_zone' => {
         'regex'   => q|(?<time_zone>\w+(?:/\w+))|,
+        'sprintf' => '%s',
+    },
+    'phrase' => {
+        'regex'   => q/(?<phrase>(?i)today|tomorrow|yesterday|(?:next|last)\w+(?:week|month|year)|\d+\w+(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)\w+(?:ago|from\w+now))/,
         'sprintf' => '%s',
     },
 };
@@ -197,7 +218,7 @@ my $DEFAULT_STRPTIME_MAPPINGS = {
     '%H' => 'hour',
     '%h' => 'month_abbr',
     '%I' => 'hour_12',
-    '%j' => 'day_of_year', # TODO
+    '%j' => 'day_of_year',
     '%k' => 'hour', # TODO: This one is space-padded.
     '%l' => 'hour_12', # TODO: This one is space-padded.
     '%M' => 'minute',
@@ -214,7 +235,7 @@ my $DEFAULT_STRPTIME_MAPPINGS = {
     '%W' => 'week_number_1', # TODO
     '%w' => 'day_of_week_0', # TODO
     '%Y' => 'year',
-    '%y' => 'year_abbr', # TODO
+    '%y' => 'year_abbr',
     '%Z' => 'time_zone', # TODO
     '%z' => 'time_zone_offset', # TODO
 };
@@ -226,6 +247,22 @@ my $DEFAULT_TRANSFORMATIONS = {
     # to => {
     #   from => \&transformation_coderef,
     # },
+    'year' => {
+        'year_abbr' => sub {
+            my ($date) = @_;
+            return $date->{'year'} if defined($date->{'year'});
+            return $date->{'year_abbr'} < 70
+                ? $date->{'year_abbr'} + 2000
+                : $date->{'year_abbr'} + 1900;
+        },
+    },
+    'year_abbr' => {
+        'year' => sub {
+            my ($date) = @_;
+            return $date->{'year_abbr'} if defined($date->{'year_abbr'});
+            return substr($date->{'year'}, -2, 2);
+        },
+    },
     'month' => {
         'month_abbr' => sub {
             my ($date) = @_;
@@ -339,6 +376,14 @@ sub initialize_parser {
         );
     }
 
+    if (defined($definition->{'heuristic'})) {
+        return $self->initialize_parser_heuristic(
+            {
+                'heuristic' => $definition->{'heuristic'},
+            },
+        );
+    }
+
     # Nothing initialized.
     return;
 }
@@ -440,6 +485,20 @@ sub initialize_parser_for_regex_named_capture {
             my $success = $date_string =~ $regex;
             return if ! $success;
             my %date = %+;
+
+            # Move 'hour_12' if the wrong value.
+            if (
+                defined($date{'hour_12'})
+                &&
+                (
+                    $date{'hour_12'} > 12
+                    ||
+                    $date{'hour_12'} == 0
+                )
+            ) {
+                $date{'hour'} = delete $date{'hour_12'};
+            }
+
             return \%date;
         },
     );
@@ -493,6 +552,344 @@ sub initialize_parser_for_strptime {
     my $success = $self->initialize_parser_for_regex_named_capture(
         {
             'regex' => qr/$format/,
+        },
+    );
+    return $success;
+}
+
+=item initialize_parser_heuristic()
+
+=cut
+
+sub initialize_parser_heuristic {
+    my ($self, $definition) = @_;
+    my $hint = $definition->{'heuristic'};
+    my $known_parsers = {}; # Populated when we add a parser to the stack in front of this one.
+    my $regex_for_date = qr{ \w+ [-/\.] \w+ (?:[-/\.] \w+) }x;
+    my $regex_for_time = qr/ \d\d? : \d\d (?::\d\d) /x;
+    my $regex_for_time_zone_offset = qr/ [-+] \d\d? (?:\d\d) /x;
+    my $regex_for_time_zone_long_name = qr{ [[:alpha:]]+ / [[:alpha:]]+ (?:_ [[:alpha:]]+) }x;
+    my $regex_for_number = qr/ \d+ /x;
+    my $regex_for_string = qr/ [[:alpha:]]+ /x;
+    my $regex_for_whitespace = qr/ \s+ /x;
+    my $token_regex = qr{
+        # time zone offset
+        ( $regex_for_time_zone_offset )
+        # time
+        | ( $regex_for_time )
+        # time zone long name
+        | ( $regex_for_time_zone_long_name )
+        # date
+        | ( $regex_for_date )
+        # number
+        | ( $regex_for_number )
+        # string
+        | ( $regex_for_string )
+        # whitespace
+        | ( $regex_for_whitespace )
+        # anything else
+        | ( . )
+    }x;
+    my $success = $self->add_parser(
+        sub {
+            my ($date_string) = @_;
+            my $order_string; # Will be set with ymd|dmy|mdy when we have enough information.
+
+            # Split string into parts that can be identified later.
+            say "Parsing date string into parts: $date_string" if $self->{'debug'};
+            my @parts = $date_string =~ /$token_regex/g;
+            return if ! @parts;
+
+            # Try to identify what each part is, based on what it looks like, and what order it is in.
+            my @parser_parts = ();
+            my $date = {};
+            foreach my $part (grep { defined($_) } @parts) {
+                say "Trying to identify part: '$part'" if $self->{'debug'};
+                if ($part =~ $regex_for_time_zone_offset) {
+                    say "  time_zone_offset ($part)" if $self->{'debug'};
+                    push @parser_parts, $TOKENS->{'time_zone_offset'}->{'regex'};
+                    $date->{'time_zone_offset'} = $part;
+                }
+                elsif ($part =~ $regex_for_time) {
+                    my @time = split(/:/, $part);
+
+                    say "  hour ($time[0])" if $self->{'debug'};
+                    push @parser_parts, $TOKENS->{'hour'}->{'regex'};
+                    $date->{'hour'} = $time[0];
+
+                    say "  minute ($time[1])" if $self->{'debug'};
+                    push @parser_parts, quotemeta(':'), $TOKENS->{'minute'}->{'regex'};
+                    $date->{'minute'} = $time[1];
+
+                    if (@time > 2) {
+                        say "  second ($time[2])" if $self->{'debug'};
+                        push @parser_parts, quotemeta(':'), $TOKENS->{'second'}->{'regex'};
+                        $date->{'second'} = $time[2];
+                    }
+                }
+                elsif ($part =~ $regex_for_time_zone_long_name) {
+                    say "  time_zone ($part)";
+                    push @parser_parts, $TOKENS->{'time_zone'}->{'regex'};
+                    $date->{'time_zone'} = $part;
+                }
+                elsif ($part =~ $regex_for_date) {
+                    my @date_parts = split(m|[-/\.]|, $part);
+                    my @order = ();
+                    foreach my $index (0..2) {
+                        if ($date_parts[$index] =~ /^\d+$/) {
+                            if ($date_parts[$index] > 31) {
+                                $order[$index] = 'y';
+                            }
+                            elsif ($date_parts[$index] > 12) {
+                                $order[$index] = 'd';
+                            }
+                            else {
+                                $order[$index] = 'm';
+                            }
+                        }
+                        elsif ($date_parts[$index] =~ $TOKENS->{'month_abbr'}->{'regex'}) {
+                            $order[$index] = 'm';
+                        }
+                    }
+                    $order_string = join('', @order);
+                    if ($order_string !~ /^ymd|dmy|mdy$/) {
+                        say "Using date token order hint: $hint" if $self->{'debug'};
+                        $order_string = $hint;
+                    }
+                    @order = split(//, $order_string);
+                    foreach my $index (0..2) {
+                        if ($order[$index] eq 'y') {
+                            if ($date_parts[$index] !~ $TOKENS->{'year'}->{'regex'}) {
+                                warn "Error parsing year\n";
+                            }
+                            say "  year ($date_parts[$index])" if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{'year'}->{'regex'};
+                            $date->{'year'} = $date_parts[$index];
+                        }
+                        elsif ($order[$index] eq 'm') {
+                            if ($date_parts[$index] =~ $TOKENS->{'month'}->{'regex'}) {
+                                say "  month ($date_parts[$index])" if $self->{'debug'};
+                                push @parser_parts, $TOKENS->{'month'}->{'regex'};
+                                $date->{'month'} = $date_parts[$index];
+                            }
+                            elsif ($date_parts[$index] =~ $TOKENS->{'month_abbr'}->{'regex'}) {
+                                say "  month_abbr ($date_parts[$index])" if $self->{'debug'};
+                                push @parser_parts, $TOKENS->{'month_abbr'}->{'regex'};
+                                $date->{'month_abbr'} = $date_parts[$index];
+                            }
+                            else {
+                                warn "Error parsing month\n";
+                            }
+                        }
+                        elsif ($order[$index] eq 'd') {
+                            if ($date_parts[$index] !~ $TOKENS->{'day'}->{'regex'}) {
+                                warn "Error parsing day\n";
+                            }
+                            say "  day ($date_parts[$index])" if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{'day'}->{'regex'};
+                            $date->{'day'} = $date_parts[$index];
+                        }
+                        push @parser_parts, qr|[-/\.]| if $index < 2;
+                    }
+                }
+                elsif ($part =~ /^$regex_for_number$/) {
+                    if (length($part) == 8) {
+                        my $regex_date =
+                            qr/
+                                $TOKENS->{'year'}->{'regex'}
+                                $TOKENS->{'month'}->{'regex'}
+                                $TOKENS->{'day'}->{'regex'}
+                            /x;
+                        my $success = $part =~ $regex_date;
+                        my %ymd = %+;
+                        foreach my $token ('year', 'month', 'day') {
+                            say "  $token ($ymd{$token})";
+                            push @parser_parts, $TOKENS->{$token}->{'regex'};
+                            $date->{$token} = $ymd{$token};
+                        }
+                    }
+                    elsif (length($part) == 6) {
+                        if (defined($date->{'year'})) {
+                            # This is a concatenated time: HHMM
+                            my $regex_time =
+                                qr/
+                                    $TOKENS->{'hour'}->{'regex'}
+                                    $TOKENS->{'minute'}->{'regex'}
+                                    $TOKENS->{'second'}->{'regex'}
+                                /x;
+                            my $success = $part =~ $regex_time;
+                            my %hms = %+;
+                            foreach my $token ('hour', 'minute', 'second') {
+                                say "  $token ($hms{$token})";
+                                push @parser_parts, $TOKENS->{$token}->{'regex'};
+                                $date->{$token} = $hms{$token};
+                            }
+                        }
+                        else {
+                            # This is a concatenated date: YYMMDD
+                            my $regex_date =
+                                qr/
+                                    $TOKENS->{'year_abbr'}->{'regex'}
+                                    $TOKENS->{'month'}->{'regex'}
+                                    $TOKENS->{'day'}->{'regex'}
+                                /x;
+                            my $success = $part =~ $regex_date;
+                            my %ymd = %+;
+                            foreach my $token ('year_abbr', 'month', 'day') {
+                                say "  $token ($ymd{$token})";
+                                push @parser_parts, $TOKENS->{$token}->{'regex'};
+                                $date->{$token} = $ymd{$token};
+                            }
+                        }
+                    }
+                    elsif (length($part) == 3 && defined($date->{'year'})) {
+                        # day_of_year
+                        say "  day_of_year ($part)" if $self->{'debug'};
+                        push @parser_parts, $TOKENS->{'day_of_year'}->{'regex'};
+                        $date->{'day_of_year'} = $part;
+                    }
+                    elsif (length($part) == 4) {
+                        if (defined($date->{'year'})) {
+                            # This is a concatenated time without seconds: HHMM
+                            my $regex_time =
+                                qr/
+                                    $TOKENS->{'hour'}->{'regex'}
+                                    $TOKENS->{'minute'}->{'regex'}
+                                /x;
+                            my $success = $part =~ $regex_time;
+                            my %hm = %+;
+                            foreach my $token ('hour', 'minute') {
+                                say "  $token ($hm{$token})";
+                                push @parser_parts, $TOKENS->{$token}->{'regex'};
+                                $date->{$token} = $hm{$token};
+                            }
+                        }
+                        else {
+                            # year (if month and day have not been set, order is now ymd).
+                            say "  year ($part)" if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{'year'}->{'regex'};
+                            $date->{'year'} = $part;
+                            $order_string ||= 'ymd';
+                        }
+                    }
+                    else {
+                        # Either month, or day, or year (based on $order_string or $hint or what has been set already).
+                        if (defined($date->{'day'})) {
+                            # TODO: Check that $order_string // $hint is dmy?
+                            say "  month ($part)" if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{'month'}->{'regex'};
+                            $date->{'month'} = $part;
+                        }
+                        elsif (
+                            defined($date->{'month'})
+                            ||
+                            defined($date->{'month_abbr'})
+                            ||
+                            defined($date->{'month_name'})
+                        ) {
+                            # TODO: Check that $order_string // $hint is mdy|ymd?
+                            say "  day ($part)" if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{'day'}->{'regex'};
+                            $date->{'day'} = $part;
+                        }
+                        elsif (
+                            ($order_string // $hint) eq 'dmy'
+                            &&
+                            ! defined($date->{'year'})
+                        ) {
+                            say "  day ($part) based on " . ($order_string // $hint) if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{'day'}->{'regex'};
+                            $date->{'day'} = $part;
+                        }
+                        elsif (
+                            ($order_string // $hint) eq 'mdy'
+                            &&
+                            ! defined($date->{'year'})
+                        ) {
+                            say "  month ($part) based on " . ($order_string // $hint) if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{'month'}->{'regex'};
+                            $date->{'month'} = $part;
+                        }
+                        elsif (
+                            ($order_string // $hint) eq 'ymd'
+                            &&
+                            (
+                                ! defined($date->{'month'})
+                                &&
+                                ! defined($date->{'month_abbr'})
+                                &&
+                                ! defined($date->{'month_name'})
+                            )
+                        ) {
+                            say "  year ($part) based on " . ($order_string // $hint) if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{'year'}->{'regex'};
+                            $date->{'year'} = $part;
+                        }
+                        else {
+                            say "  number ($part)" if $self->{'debug'};
+                            push @parser_parts, $regex_for_number;
+                        }
+                    }
+                }
+                elsif ($part =~ $regex_for_string) {
+                    # TODO: Look for time zone abbreviation.
+                    my $found = 0;
+                    foreach my $token ('am_or_pm', 'month_name', 'month_abbr', 'day_name', 'day_abbr', 'phrase') {
+                        if ($part =~ $TOKENS->{$token}->{'regex'}) {
+                            say "  $token ($part)" if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{$token}->{'regex'};
+                            $date->{$token} = $part;
+                            $found = 1;
+                            last;
+                        }
+                    }
+                    if (! $found) {
+                        say "  literal ($part)" if $self->{'debug'};
+                        push @parser_parts, quotemeta($part);
+                    }
+                }
+                elsif ($part =~ $regex_for_whitespace) {
+                    say "  whitespace ($part)" if $self->{'debug'};
+                    push @parser_parts, $regex_for_whitespace;
+                }
+                else {
+                    say "  literal ($part)" if $self->{'debug'};
+                    push @parser_parts, quotemeta($part);
+                }
+            }
+
+            # If am_or_pm is pm, and hour is < 12, change from hour to hour_12 (and the parser).
+            if (defined($date->{'am_or_pm'}) && lc($date->{'am_or_pm'}) eq 'pm' ) {
+                if (defined($date->{'hour'}) && $date->{'hour'} < 12) {
+                    $date->{'hour_12'} = delete $date->{'hour'};
+                    foreach my $parser_part (@parser_parts) {
+                        if ($parser_part =~ /\?<hour>/) {
+                            $parser_part =~ s/\?<hour>/?<hour_12>/;
+                        }
+                    }
+                }
+            }
+            my $parser_regex = join('', @parser_parts);
+            say "Crafted regex: $date_string -> $parser_regex" if $self->{'debug'};
+
+            # Add a new parser that will match this date format.
+            if (! defined($known_parsers->{$parser_regex}) ) {
+                $known_parsers->{$parser_regex} = 1;
+                $self->initialize_parser_for_regex_named_capture(
+                    {
+                        'regex' => qr/$parser_regex/,
+                    },
+                );
+                # Move the heuristic parser to the last slot again.
+                push(
+                    @{ $self->{'active_parsers'} },
+                    splice(
+                        @{ $self->{'active_parsers'} }, -2, 1
+                    ),
+                );
+            }
+
+            return $date;
         },
     );
     return $success;
