@@ -6,6 +6,9 @@ use warnings;
 use Test::More;
 use Date::Reformat;
 
+# For additional test cases, see the PostgreSQL regression test: src/test/regress/expected/date.out
+# https://github.com/postgres/postgres/blob/master/src/test/regress/expected/date.out
+
 my @TESTS = (
     {
         'date_string' => '2015-01-14 21:07:31',
@@ -79,6 +82,367 @@ my @TESTS = (
             'hour'   => '21',
             'minute' => '07',
             'second' => '31',
+        },
+    },
+
+    # Tests from the PostgreSQL regression test: src/test/regress/expected/date.out
+    # ymd
+    {
+        'date_string' => 'January 8, 1999',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_name'  => 'January',
+            'day'         => '8',
+        },
+    },
+    {
+        'date_string' => '1999-01-08',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'   => '1999',
+            'month'  => '01',
+            'day'    => '08',
+        },
+    },
+    {
+        'date_string' => '1999-01-18',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'   => '1999',
+            'month'  => '01',
+            'day'    => '18',
+        },
+    },
+    {
+        'date_string' => '1/8/1999',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '1/18/1999',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '18/1/1999',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '01/02/03',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year_abbr' => '01',
+            'month'     => '02',
+            'day'       => '03',
+        },
+    },
+    {
+        'date_string' => '19990108',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'   => '1999',
+            'month'  => '01',
+            'day'    => '08',
+        },
+    },
+    {
+        'date_string' => '990108',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year_abbr' => '99',
+            'month'     => '01',
+            'day'       => '08',
+        },
+    },
+    {
+        'date_string' => '1999.008',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'day_of_year' => '008',
+        },
+    },
+    {
+        'date_string' => 'J2451187',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'julian_day'  => '2451187',
+        },
+    },
+    {
+        'date_string' => 'January 8, 99 BC',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '99-Jan-08',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '1999-Jan-08',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => 'Jan-08-99',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '99-08-Jan',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '1999-08-Jan',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '99 Jan 08',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '1999 Jan 08',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08 Jan 99',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => 'Jan 08 99',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '99 08 Jan',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'day'         => '08',
+            'month_abbr'  => 'Jan',
+        },
+    },
+    {
+        'date_string' => '1999 08 Jan',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'day'         => '08',
+            'month_abbr'  => 'Jan',
+        },
+    },
+    {
+        'date_string' => '99-01-08',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '1999-01-08',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08-01-99',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '08-01-1999',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '01-08-99',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '01-08-1999',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '99-08-01',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month'       => '08',
+            'day'         => '01',
+        },
+    },
+    {
+        'date_string' => '1999-08-01',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '08',
+            'day'         => '01',
+        },
+    },
+    {
+        'date_string' => '99 01 08',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '1999 01 08',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08 01 99',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '08 01 1999',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '01 08 99',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '01 08 1999',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => undef,
+    },
+    {
+        'date_string' => '99 08 01',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'day'         => '01',
+            'month'       => '08',
+        },
+    },
+    {
+        'date_string' => '1999 08 01',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'day'         => '01',
+            'month'       => '08',
         },
     },
 );
