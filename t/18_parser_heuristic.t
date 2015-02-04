@@ -4,6 +4,8 @@ use strict;
 use warnings;
 
 use Test::More;
+use Test::Warnings 'warnings', ':no_end_test';
+
 use Date::Reformat;
 
 # For additional test cases, see the PostgreSQL regression test: src/test/regress/expected/date.out
@@ -126,6 +128,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing year: value '1' out of range (1/8/1999); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '1/18/1999',
@@ -133,6 +138,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing year: value '1' out of range (1/18/1999); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '18/1/1999',
@@ -140,6 +148,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value '1999' out of range (18/1/1999); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '01/02/03',
@@ -193,13 +204,16 @@ my @TESTS = (
             'julian_day'  => '2451187',
         },
     },
-    {
-        'date_string' => 'January 8, 99 BC',
-        'parser' => {
-            'heuristic' => 'ymd',
-        },
-        'expected' => undef,
-    },
+    # TODO: I need to find the PostgreSQL documentation on why this should fail to parse.
+    #{
+    #    'date_string' => 'January 8, 99 BC',
+    #    'parser' => {
+    #        'heuristic' => 'ymd',
+    #    },
+    #    'expected' => undef,
+    #    'warning'  => [
+    #    ],
+    #},
     {
         'date_string' => '99-Jan-08',
         'parser' => {
@@ -228,6 +242,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing year: value 'Jan' out of range (Jan-08-99); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '99-08-Jan',
@@ -235,6 +252,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value 'Jan' out of range (99-08-Jan); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '1999-08-Jan',
@@ -242,6 +262,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value 'Jan' out of range (1999-08-Jan); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '99 Jan 08',
@@ -271,6 +294,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value '99' out of range (08 Jan 99); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => 'Jan 08 99',
@@ -278,6 +304,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value '99' out of range (Jan 08 99); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '99 08 Jan',
@@ -329,6 +358,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value '99' out of range (08-01-99); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '08-01-1999',
@@ -336,6 +368,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value '1999' out of range (08-01-1999); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '01-08-99',
@@ -343,6 +378,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value '99' out of range (01-08-99); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '01-08-1999',
@@ -350,6 +388,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value '1999' out of range (01-08-1999); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '99-08-01',
@@ -401,6 +442,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value '99' out of range (08 01 99); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '08 01 1999',
@@ -408,6 +452,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing minute: value '99' out of range (08 01 1999)\n",
+        ],
     },
     {
         'date_string' => '01 08 99',
@@ -415,6 +462,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning'  => [
+            "Error parsing day: value '99' out of range (01 08 99); Perhaps you need a different heuristic hint than 'ymd'\n",
+        ],
     },
     {
         'date_string' => '01 08 1999',
@@ -422,6 +472,9 @@ my @TESTS = (
             'heuristic' => 'ymd',
         },
         'expected' => undef,
+        'warning' => [
+            "Error parsing minute: value '99' out of range (01 08 1999)\n",
+        ],
     },
     {
         'date_string' => '99 08 01',
@@ -430,8 +483,8 @@ my @TESTS = (
         },
         'expected' => {
             'year_abbr'   => '99',
-            'day'         => '01',
             'month'       => '08',
+            'day'         => '01',
         },
     },
     {
@@ -441,13 +494,13 @@ my @TESTS = (
         },
         'expected' => {
             'year'        => '1999',
-            'day'         => '01',
             'month'       => '08',
+            'day'         => '01',
         },
     },
-);
 
-plan('tests' => scalar(@TESTS));
+
+plan('tests' => scalar(@TESTS) * 2);
 
 foreach my $test (@TESTS) {
     # Set up the parser.
@@ -460,12 +513,21 @@ foreach my $test (@TESTS) {
     );
 
     # Parse the date string.
-    my $reformatted = $parser->parse_date($test->{'date_string'});
+    my $reformatted;
+    my @warnings = warnings {
+        $reformatted = $parser->parse_date($test->{'date_string'});
+    };
 
     # Verify the result is what we expect.
     is_deeply(
         $reformatted,
         $test->{'expected'},
         "Verify parsing of: $test->{'date_string'}",
+    );
+
+    is_deeply(
+        \@warnings,
+        ($test->{'warning'} // []),
+        "Verify warnings when parsing $test->{'date_string'}",
     );
 }
