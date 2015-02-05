@@ -499,6 +499,482 @@ my @TESTS = (
         },
     },
 
+    # Tests from the PostgreSQL regression test: src/test/regress/expected/date.out
+    # dmy
+    {
+        'date_string' => 'January 8, 1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_name'  => 'January',
+            'day'         => '8',
+        },
+    },
+    {
+        'date_string' => '1999-01-08',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '1999-01-18',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '01',
+            'day'         => '18',
+        },
+    },
+    {
+        'date_string' => '1/8/1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '8',
+            'day'         => '1',
+        },
+    },
+    {
+        'date_string' => '1/18/1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => undef,
+        'warning' => [
+            "Error parsing month: value '18' out of range (1/18/1999); Perhaps you need a different heuristic hint than 'dmy'\n"
+        ],
+    },
+    {
+        'date_string' => '18/1/1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '1',
+            'day'         => '18',
+        },
+    },
+    {
+        'date_string' => '01/02/03',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '03',
+            'month'       => '02',
+            'day'         => '01',
+        },
+    },
+    {
+        'date_string' => '19990108',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '990108',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '1999.008',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'day_of_year' => '008',
+        },
+    },
+    {
+        'date_string' => 'J2451187',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'julian_day'  => '2451187',
+        },
+    },
+    {
+        'date_string' => 'January 8, 99 BC',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month_name'  => 'January',
+            'day'         => '8',
+            #'era_abbr'    => 'BC', # TODO
+        },
+    },
+    {
+        'date_string' => '99-Jan-08',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => undef,
+        'warning' => [
+            "Error parsing day: value '99' out of range (99-Jan-08); Perhaps you need a different heuristic hint than 'dmy'\n"
+        ],
+    },
+    {
+        'date_string' => '1999-Jan-08',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08-Jan-99',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08-Jan-1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => 'Jan-08-99',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => 'Jan-08-1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '99-08-Jan',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => undef,
+        'warning' => [
+            "Error parsing day: value '99' out of range (99-08-Jan); Perhaps you need a different heuristic hint than 'dmy'\n"
+        ],
+    },
+    {
+        'date_string' => '1999-08-Jan',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => undef,
+        'warning' => [
+            "Error parsing day: value 'Jan' out of range (1999-08-Jan); Perhaps you need a different heuristic hint than 'dmy'\n"
+        ],
+    },
+    {
+        'date_string' => '99 Jan 08',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => undef,
+        'warning' => [
+            "Error parsing day: value '99' out of range (99 Jan 08); Perhaps you need a different heuristic hint than 'dmy'\n"
+        ],
+    },
+    {
+        'date_string' => '1999 Jan 08',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08 Jan 99',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08 Jan 1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => 'Jan 08 99',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => 'Jan 08 1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '99 08 Jan',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => undef,
+        'warning' => [
+            "Error parsing day: value '99' out of range (99 08 Jan); Perhaps you need a different heuristic hint than 'dmy'\n"
+        ],
+    },
+    {
+        'date_string' => '1999 08 Jan',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month_abbr'  => 'Jan',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '99-01-08',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => undef,
+        'warning' => [
+            "Error parsing day: value '99' out of range (99-01-08); Perhaps you need a different heuristic hint than 'dmy'\n"
+        ],
+    },
+    {
+        'date_string' => '1999-01-08',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08-01-99',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08-01-1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '01-08-99',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month'       => '08',
+            'day'         => '01',
+        },
+    },
+    {
+        'date_string' => '01-08-1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '08',
+            'day'         => '01',
+        },
+    },
+    {
+        'date_string' => '99-08-01',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => undef,
+        'warning' => [
+            "Error parsing day: value '99' out of range (99-08-01); Perhaps you need a different heuristic hint than 'dmy'\n"
+        ],
+    },
+    {
+        'date_string' => '1999-08-01',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '08',
+            'day'         => '01',
+        },
+    },
+    {
+        'date_string' => '99 01 08',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => undef,
+        'warning' => [
+            "Error parsing day: value '99' out of range (99 01 08); Perhaps you need a different heuristic hint than 'dmy'\n"
+        ],
+    },
+    {
+        'date_string' => '1999 01 08',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08 01 99',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '08 01 1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '01',
+            'day'         => '08',
+        },
+    },
+    {
+        'date_string' => '01 08 99',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year_abbr'   => '99',
+            'month'       => '08',
+            'day'         => '01',
+        },
+    },
+    {
+        'date_string' => '01 08 1999',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '08',
+            'day'         => '01',
+        },
+    },
+    {
+        'date_string' => '99 08 01',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => undef,
+        'warning' => [
+            "Error parsing day: value '99' out of range (99 08 01); Perhaps you need a different heuristic hint than 'dmy'\n"
+        ],
+    },
+    {
+        'date_string' => '1999 08 01',
+        'parser' => {
+            'heuristic' => 'dmy',
+        },
+        'expected' => {
+            'year'        => '1999',
+            'month'       => '08',
+            'day'         => '01',
+        },
+    },
+);
+
 
 plan('tests' => scalar(@TESTS) * 2);
 
