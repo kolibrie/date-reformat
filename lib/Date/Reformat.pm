@@ -443,6 +443,15 @@ sub initialize_formatter {
         }
     }
 
+    if (defined($definition->{'coderef'})) {
+        return $self->initialize_formatter_for_coderef(
+            {
+                'coderef' => $definition->{'coderef'},
+                'params'  => $definition->{'params'},
+            },
+        );
+    }
+
     # Nothing initialized.
     return;
 }
@@ -1083,6 +1092,29 @@ sub initialize_formatter_for_hashref {
     return $success;
 }
 
+=item initialize_formatter_for_coderef()
+
+=cut
+
+sub initialize_formatter_for_coderef {
+    my ($self, $definition) = @_;
+    my $coderef = $definition->{'coderef'} // sub { @_ };
+    my $params = $definition->{'params'} // die "Unable to create coderef formatter: No 'params' argument defined.";
+    # TODO: Validate parameters.
+
+    $self->initialize_formatter_for_arrayref(
+        {
+            'structure' => 'array',
+            'params'    => $params,
+        },
+    );
+
+    my $success = $self->add_formatter(
+        $coderef,
+    );
+    return $success;
+}
+
 =item initialize_formatter_for_sprintf()
 
 =cut
@@ -1371,11 +1403,12 @@ sub parse_date {
 
 sub format_date {
     my ($self, $date) = @_;
-    my $formatted = $date;
+    my @formatted = ($date);
     foreach my $formatter (@{ $self->{'active_formatters'} }) {
-        $formatted = $formatter->($formatted);
+        @formatted = $formatter->(@formatted);
     }
-    return $formatted;
+    return $formatted[0] if (scalar(@formatted) == 1);
+    return @formatted;
 }
 
 =item reformat_date()
