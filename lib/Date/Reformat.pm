@@ -78,7 +78,7 @@ my $TOKENS = {
         'sprintf' => '%04d',
     },
     'year_abbr' => {
-        'regex'   => q/(?<year>\d{2})/,
+        'regex'   => q/(?<year_abbr>\d{2})/,
         'sprintf' => '%02d',
     },
     'month' => {
@@ -114,17 +114,28 @@ my $TOKENS = {
         'regex'   => q/(?<day_of_year>\d\d?\d?)/,
         'sprintf' => '%03d',
     },
+    'julian_day' => {
+        'regex'      => q/J(?<julian_day>\d+)/,
+        'sprintf'    => '%s',
+        'constraint' => sub { $_[0] >= 0 },
+    },
+    'era_abbr' => {
+        'regex'      => q/(?<era_abbr>BC|AD|BCE|CE)/,
+        'sprintf'    => '%s',
+    },
     'hour' => {
-        'regex'   => q/(?<hour>\d\d?)/,
-        'sprintf' => '%02d',
+        'regex'      => q/(?<hour>\d\d?)/,
+        'sprintf'    => '%02d',
+        'constraint' => sub { $_[0] >= 0 && $_[0] < 24 },
     },
     'hour_12' => {
         'regex'   => q/(?<hour_12>\d\d?)/,
         'sprintf' => '%d',
     },
     'minute' => {
-        'regex'   => q/(?<minute>\d\d)/,
-        'sprintf' => '%02d',
+        'regex'      => q/(?<minute>\d\d)/,
+        'sprintf'    => '%02d',
+        'constraint' => sub { $_[0] >= 0 && $_[0] < 60 },
     },
     'second' => {
         'regex'   => q/(?<second>\d\d)/,
@@ -569,6 +580,7 @@ sub initialize_parser_heuristic {
     my $regex_for_time = qr/ \d\d? : \d\d (?::\d\d) /x;
     my $regex_for_time_zone_offset = qr/ [-+] \d\d? (?:\d\d) /x;
     my $regex_for_time_zone_long_name = qr{ [[:alpha:]]+ / [[:alpha:]]+ (?:_ [[:alpha:]]+) }x;
+    my $regex_for_julian_day = qr/ J\d+ /x;
     my $regex_for_number = qr/ \d+ /x;
     my $regex_for_string = qr/ [[:alpha:]]+ /x;
     my $regex_for_whitespace = qr/ \s+ /x;
@@ -581,6 +593,8 @@ sub initialize_parser_heuristic {
         | ( $regex_for_time_zone_long_name )
         # date
         | ( $regex_for_date )
+        # Julian day
+        | ( $regex_for_julian_day )
         # number
         | ( $regex_for_number )
         # string
@@ -605,12 +619,12 @@ sub initialize_parser_heuristic {
             my $date = {};
             foreach my $part (grep { defined($_) } @parts) {
                 say "Trying to identify part: '$part'" if $self->{'debug'};
-                if ($part =~ $regex_for_time_zone_offset) {
+                if ($part =~ /^$regex_for_time_zone_offset$/) {
                     say "  time_zone_offset ($part)" if $self->{'debug'};
                     push @parser_parts, $TOKENS->{'time_zone_offset'}->{'regex'};
                     $date->{'time_zone_offset'} = $part;
                 }
-                elsif ($part =~ $regex_for_time) {
+                elsif ($part =~ /^$regex_for_time$/) {
                     my @time = split(/:/, $part);
 
                     say "  hour ($time[0])" if $self->{'debug'};
@@ -627,31 +641,61 @@ sub initialize_parser_heuristic {
                         $date->{'second'} = $time[2];
                     }
                 }
-                elsif ($part =~ $regex_for_time_zone_long_name) {
+                elsif ($part =~ /^$regex_for_time_zone_long_name$/) {
                     say "  time_zone ($part)";
                     push @parser_parts, $TOKENS->{'time_zone'}->{'regex'};
                     $date->{'time_zone'} = $part;
                 }
-                elsif ($part =~ $regex_for_date) {
+                elsif ($part =~ /^$regex_for_date$/) {
                     my @date_parts = split(m|[-/\.]|, $part);
                     my @order = ();
-                    foreach my $index (0..2) {
-                        if ($date_parts[$index] =~ /^\d+$/) {
-                            if ($date_parts[$index] > 31) {
-                                $order[$index] = 'y';
-                            }
-                            elsif ($date_parts[$index] > 12) {
-                                $order[$index] = 'd';
-                            }
-                            else {
-                                $order[$index] = 'm';
-                            }
-                        }
-                        elsif ($date_parts[$index] =~ $TOKENS->{'month_abbr'}->{'regex'}) {
-                            $order[$index] = 'm';
-                        }
-                    }
+                    # PostgreSQL forces reliance on the hint.
+                    #foreach my $index (0..2) {
+                    #    if ($date_parts[$index] =~ /^\d+$/) {
+                    #        if ($date_parts[$index] > 31) {
+                    #            $order[$index] = 'y';
+                    #        }
+                    #        elsif ($date_parts[$index] > 12) {
+                    #            $order[$index] = 'd';
+                    #        }
+                    #        else {
+                    #            $order[$index] = 'm';
+                    #        }
+                    #    }
+                    #    elsif ($date_parts[$index] =~ $TOKENS->{'month_abbr'}->{'regex'}) {
+                    #        $order[$index] = 'm';
+                    #    }
+                    #}
                     $order_string = join('', @order);
+                    if (
+                        $date_parts[0] =~ /^$TOKENS->{'year'}->{'regex'}$/
+                        &&
+                        scalar(keys %$date) == 0
+                    ) {
+                        $order_string = 'ymd';
+                    }
+                    elsif (
+                        $hint eq 'dmy'
+                        &&
+                        (
+                            $date_parts[0] =~ /^$TOKENS->{'month_abbr'}->{'regex'}$/
+                            ||
+                            $date_parts[0] =~ /^$TOKENS->{'month_name'}->{'regex'}$/
+                        )
+                    ) {
+                        $order_string = 'mdy';
+                    }
+                    elsif (
+                        $hint eq 'mdy'
+                        &&
+                        (
+                            $date_parts[1] =~ /^$TOKENS->{'month_abbr'}->{'regex'}$/
+                            ||
+                            $date_parts[1] =~ /^$TOKENS->{'month_name'}->{'regex'}$/
+                        )
+                    ) {
+                        $order_string = 'dmy';
+                    }
                     if ($order_string !~ /^ymd|dmy|mdy$/) {
                         say "Using date token order hint: $hint" if $self->{'debug'};
                         $order_string = $hint;
@@ -659,31 +703,55 @@ sub initialize_parser_heuristic {
                     @order = split(//, $order_string);
                     foreach my $index (0..2) {
                         if ($order[$index] eq 'y') {
-                            if ($date_parts[$index] !~ $TOKENS->{'year'}->{'regex'}) {
-                                warn "Error parsing year\n";
+                            if ($date_parts[$index] =~ /^$TOKENS->{'year'}->{'regex'}$/) {
+                                say "  year ($date_parts[$index])" if $self->{'debug'};
+                                push @parser_parts, $TOKENS->{'year'}->{'regex'};
+                                $date->{'year'} = $date_parts[$index];
                             }
-                            say "  year ($date_parts[$index])" if $self->{'debug'};
-                            push @parser_parts, $TOKENS->{'year'}->{'regex'};
-                            $date->{'year'} = $date_parts[$index];
+                            elsif ($date_parts[$index] =~ /^$TOKENS->{'year_abbr'}->{'regex'}$/) {
+                                say "  year_abbr ($date_parts[$index])" if $self->{'debug'};
+                                push @parser_parts, $TOKENS->{'year_abbr'}->{'regex'};
+                                $date->{'year_abbr'} = $date_parts[$index];
+                            }
+                            else {
+                                warn "Error parsing year: "
+                                    . "value '$date_parts[$index]' out of range ($part); "
+                                    . "Perhaps you need a different heuristic hint than '$hint'\n";
+                                return;
+                            }
                         }
                         elsif ($order[$index] eq 'm') {
-                            if ($date_parts[$index] =~ $TOKENS->{'month'}->{'regex'}) {
+                            if (
+                                $date_parts[$index] =~ /^$TOKENS->{'month'}->{'regex'}$/
+                                && 
+                                $date_parts[$index] <= 12
+                            ) {
                                 say "  month ($date_parts[$index])" if $self->{'debug'};
                                 push @parser_parts, $TOKENS->{'month'}->{'regex'};
                                 $date->{'month'} = $date_parts[$index];
                             }
-                            elsif ($date_parts[$index] =~ $TOKENS->{'month_abbr'}->{'regex'}) {
+                            elsif ($date_parts[$index] =~ /^$TOKENS->{'month_abbr'}->{'regex'}$/) {
                                 say "  month_abbr ($date_parts[$index])" if $self->{'debug'};
                                 push @parser_parts, $TOKENS->{'month_abbr'}->{'regex'};
                                 $date->{'month_abbr'} = $date_parts[$index];
                             }
                             else {
-                                warn "Error parsing month\n";
+                                warn "Error parsing month: "
+                                    . "value '$date_parts[$index]' out of range ($part); "
+                                    . "Perhaps you need a different heuristic hint than '$hint'\n";
+                                return;
                             }
                         }
                         elsif ($order[$index] eq 'd') {
-                            if ($date_parts[$index] !~ $TOKENS->{'day'}->{'regex'}) {
-                                warn "Error parsing day\n";
+                            if (
+                                $date_parts[$index] !~ /^$TOKENS->{'day'}->{'regex'}$/
+                                ||
+                                $date_parts[$index] > 31
+                            ) {
+                                warn "Error parsing day: "
+                                    . "value '$date_parts[$index]' out of range ($part); "
+                                    . "Perhaps you need a different heuristic hint than '$hint'\n";
+                                return;
                             }
                             say "  day ($date_parts[$index])" if $self->{'debug'};
                             push @parser_parts, $TOKENS->{'day'}->{'regex'};
@@ -691,6 +759,12 @@ sub initialize_parser_heuristic {
                         }
                         push @parser_parts, qr|[-/\.]| if $index < 2;
                     }
+                }
+                elsif ($part =~ /^$regex_for_julian_day$/) {
+                    my $success = $part =~ $TOKENS->{'julian_day'}->{'regex'};
+                    say "  julian_day ($part)\n";
+                    push @parser_parts, $TOKENS->{'julian_day'}->{'regex'};
+                    $date->{'julian_day'} = $+{'julian_day'};
                 }
                 elsif ($part =~ /^$regex_for_number$/) {
                     if (length($part) == 8) {
@@ -749,7 +823,7 @@ sub initialize_parser_heuristic {
                         $date->{'day_of_year'} = $part;
                     }
                     elsif (length($part) == 4) {
-                        if (defined($date->{'year'})) {
+                        if (defined($date->{'year'}) || defined($date->{'year_abbr'})) {
                             # This is a concatenated time without seconds: HHMM
                             my $regex_time =
                                 qr/
@@ -759,6 +833,11 @@ sub initialize_parser_heuristic {
                             my $success = $part =~ $regex_time;
                             my %hm = %+;
                             foreach my $token ('hour', 'minute') {
+                                if (! $TOKENS->{$token}->{'constraint'}->($hm{$token})) {
+                                    warn "Error parsing $token: "
+                                        . "value '$hm{$token}' out of range ($date_string)\n";
+                                    return;
+                                }
                                 say "  $token ($hm{$token})";
                                 push @parser_parts, $TOKENS->{$token}->{'regex'};
                                 $date->{$token} = $hm{$token};
@@ -766,64 +845,70 @@ sub initialize_parser_heuristic {
                         }
                         else {
                             # year (if month and day have not been set, order is now ymd).
-                            say "  year ($part)" if $self->{'debug'};
-                            push @parser_parts, $TOKENS->{'year'}->{'regex'};
-                            $date->{'year'} = $part;
-                            $order_string ||= 'ymd';
-                        }
-                    }
-                    else {
-                        # Either month, or day, or year (based on $order_string or $hint or what has been set already).
-                        if (defined($date->{'day'})) {
-                            # TODO: Check that $order_string // $hint is dmy?
-                            say "  month ($part)" if $self->{'debug'};
-                            push @parser_parts, $TOKENS->{'month'}->{'regex'};
-                            $date->{'month'} = $part;
-                        }
-                        elsif (
-                            defined($date->{'month'})
-                            ||
-                            defined($date->{'month_abbr'})
-                            ||
-                            defined($date->{'month_name'})
-                        ) {
-                            # TODO: Check that $order_string // $hint is mdy|ymd?
-                            say "  day ($part)" if $self->{'debug'};
-                            push @parser_parts, $TOKENS->{'day'}->{'regex'};
-                            $date->{'day'} = $part;
-                        }
-                        elsif (
-                            ($order_string // $hint) eq 'dmy'
-                            &&
-                            ! defined($date->{'year'})
-                        ) {
-                            say "  day ($part) based on " . ($order_string // $hint) if $self->{'debug'};
-                            push @parser_parts, $TOKENS->{'day'}->{'regex'};
-                            $date->{'day'} = $part;
-                        }
-                        elsif (
-                            ($order_string // $hint) eq 'mdy'
-                            &&
-                            ! defined($date->{'year'})
-                        ) {
-                            say "  month ($part) based on " . ($order_string // $hint) if $self->{'debug'};
-                            push @parser_parts, $TOKENS->{'month'}->{'regex'};
-                            $date->{'month'} = $part;
-                        }
-                        elsif (
-                            ($order_string // $hint) eq 'ymd'
-                            &&
-                            (
+                            my $token = $self->most_likely_token(
+                                'possible_tokens' => ['year'],
+                                'already_claimed' => $date,
+                                'heuristic'       => ($order_string // $hint),
+                                'date_string'     => $date_string,
+                                'value'           => $part,
+                            );
+                            return if ! defined $token;
+                            say "  $token ($part)" if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{$token}->{'regex'};
+                            $date->{$token} = $part;
+                            if (
+                                ! defined($date->{'day'})
+                                &&
                                 ! defined($date->{'month'})
                                 &&
                                 ! defined($date->{'month_abbr'})
                                 &&
                                 ! defined($date->{'month_name'})
-                            )
-                        ) {
-                            say "  year ($part) based on " . ($order_string // $hint) if $self->{'debug'};
-                            push @parser_parts, $TOKENS->{'year'}->{'regex'};
-                            $date->{'year'} = $part;
+                            ) {
+                                $order_string ||= 'ymd';
+                            }
+                        }
+                    }
+                    else {
+                        # Either month, or day, or year (based on $order_string or $hint or what has been set already).
+                        if (($order_string // $hint) eq 'dmy') {
+                            my $token = $self->most_likely_token(
+                                'possible_tokens' => ['day', 'month', 'year', 'year_abbr'],
+                                'already_claimed' => $date,
+                                'heuristic'       => ($order_string // $hint),
+                                'date_string'     => $date_string,
+                                'value'           => $part,
+                            );
+                            return if ! defined $token;
+                            say "  $token ($part) based on " . ($order_string // $hint) if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{$token}->{'regex'};
+                            $date->{$token} = $part;
+                        }
+                        elsif (($order_string // $hint) eq 'mdy') {
+                            my $token = $self->most_likely_token(
+                                'possible_tokens' => ['month', 'day', 'year', 'year_abbr'],
+                                'already_claimed' => $date,
+                                'heuristic'       => ($order_string // $hint),
+                                'date_string'     => $date_string,
+                                'value'           => $part,
+                            );
+                            return if ! defined $token;
+                            say "  $token ($part) based on " . ($order_string // $hint) if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{$token}->{'regex'};
+                            $date->{$token} = $part;
+                        }
+                        elsif (($order_string // $hint) eq 'ymd') {
+                            my $token = $self->most_likely_token(
+                                'possible_tokens' => ['year', 'year_abbr', 'month', 'day'],
+                                'already_claimed' => $date,
+                                'heuristic'       => ($order_string // $hint),
+                                'date_string'     => $date_string,
+                                'value'           => $part,
+                            );
+                            return if ! defined $token;
+                            say "  $token ($part) based on " . ($order_string // $hint) if $self->{'debug'};
+                            push @parser_parts, $TOKENS->{$token}->{'regex'};
+                            $date->{$token} = $part;
                         }
                         else {
                             say "  number ($part)" if $self->{'debug'};
@@ -831,24 +916,39 @@ sub initialize_parser_heuristic {
                         }
                     }
                 }
-                elsif ($part =~ $regex_for_string) {
+                elsif ($part =~ /^$regex_for_string$/) {
                     # TODO: Look for time zone abbreviation.
-                    my $found = 0;
-                    foreach my $token ('am_or_pm', 'month_name', 'month_abbr', 'day_name', 'day_abbr', 'phrase') {
-                        if ($part =~ $TOKENS->{$token}->{'regex'}) {
-                            say "  $token ($part)" if $self->{'debug'};
-                            push @parser_parts, $TOKENS->{$token}->{'regex'};
-                            $date->{$token} = $part;
-                            $found = 1;
-                            last;
+                    my $token = $self->most_likely_token(
+                        'possible_tokens' => ['am_or_pm', 'era_abbr', 'month_name', 'month_abbr', 'day_name', 'day_abbr', 'phrase'],
+                        'already_claimed' => $date,
+                        'date_string'     => $date_string,
+                        'value'           => $part,
+                    );
+                    if ($token) {
+                        if ($token eq 'month_name' || $token eq 'month_abbr') {
+                            if (defined($date->{'month'})) {
+                                say "  $token will need to take the place of month";
+                                if (($order_string // $hint) =~ /md/) {
+                                    say "  day ($date->{'month'}) moved from month" if $self->{'debug'};
+                                    foreach my $parser_part (@parser_parts) {
+                                        if ($parser_part =~ /\?<month>/) {
+                                            $parser_part = $TOKENS->{'day'}->{'regex'};
+                                        }
+                                    }
+                                    $date->{'day'} = delete $date->{'month'};
+                                }
+                            }
                         }
+                        say "  $token ($part)" if $self->{'debug'};
+                        push @parser_parts, $TOKENS->{$token}->{'regex'};
+                        $date->{$token} = $part;
                     }
-                    if (! $found) {
+                    else {
                         say "  literal ($part)" if $self->{'debug'};
                         push @parser_parts, quotemeta($part);
                     }
                 }
-                elsif ($part =~ $regex_for_whitespace) {
+                elsif ($part =~ /^$regex_for_whitespace$/) {
                     say "  whitespace ($part)" if $self->{'debug'};
                     push @parser_parts, $regex_for_whitespace;
                 }
@@ -1081,6 +1181,66 @@ sub transform_token_value {
 
     return;
 }
+
+=item most_likely_token()
+
+=cut
+
+sub most_likely_token {
+    my ($self, %args) = @_;
+    my $already_claimed = $args{'already_claimed'} // {};
+    my $possible_tokens = $args{'possible_tokens'} // return;
+    my $hint = $args{'heuristic'} // '';
+    my $date_part = $args{'value'} // return;
+    my $date_string = $args{'date_string'} // $date_part;
+
+    foreach my $token (@$possible_tokens) {
+        if ($token eq 'day') {
+            next if defined($already_claimed->{'day'});
+            next if ($date_part !~ /^$TOKENS->{$token}->{'regex'}$/);
+            if ($date_part > 31) {
+                warn "Error parsing day: "
+                    . "value '$date_part' out of range ($date_string); "
+                    . "Perhaps you need a different heuristic hint than '$hint'\n";
+                return;
+            }
+            return $token;
+        }
+        if ($token eq 'month') {
+            next if defined($already_claimed->{'month'});
+            next if defined($already_claimed->{'month_abbr'});
+            next if defined($already_claimed->{'month_name'});
+            next if ($date_part !~ /^$TOKENS->{$token}->{'regex'}$/);
+            if ($date_part > 12) {
+                warn "Error parsing month: "
+                    . "value '$date_part' out of range ($date_string); "
+                    . "Perhaps you need a different heuristic hint than '$hint'\n";
+                return;
+            }
+            return $token;
+        }
+        if ($token eq 'year' || $token eq 'year_abbr') {
+            next if defined($already_claimed->{'year'});
+            next if defined($already_claimed->{'year_abbr'});
+            next if ($date_part !~ /^$TOKENS->{$token}->{'regex'}$/);
+            return $token;
+        }
+
+        # Any other type of token does not need special handling.
+        next if defined($already_claimed->{$token});
+        next if ($date_part !~ /^$TOKENS->{$token}->{'regex'}$/);
+        return $token;
+    }
+
+    if ($hint) {
+        warn "Error parsing $possible_tokens->[0]: "
+            . "elements out of order ($date_string); "
+            . "Perhaps you need a different heuristic hint than '$hint'\n";
+    }
+
+    return;
+}
+
 
 =item add_parser()
 

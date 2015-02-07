@@ -627,7 +627,7 @@ my @TESTS = (
             'year_abbr'   => '99',
             'month_name'  => 'January',
             'day'         => '8',
-            #'era_abbr'    => 'BC', # TODO
+            'era_abbr'    => 'BC',
         },
     },
     {
