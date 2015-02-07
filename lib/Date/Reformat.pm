@@ -423,6 +423,26 @@ sub initialize_formatter {
         );
     }
 
+    if (defined($definition->{'structure'})) {
+        if ($definition->{'structure'} =~ /^hash(?:ref)?$/) {
+            return $self->initialize_formatter_for_hashref(
+                {
+                    'structure' => $definition->{'structure'},
+                    'params'    => $definition->{'params'},
+                },
+            );
+        }
+
+        if ($definition->{'structure'} =~ /^array(?:ref)?$/) {
+            return $self->initialize_formatter_for_arrayref(
+                {
+                    'structure' => $definition->{'structure'},
+                    'params'    => $definition->{'params'},
+                },
+            );
+        }
+    }
+
     # Nothing initialized.
     return;
 }
@@ -990,6 +1010,74 @@ sub initialize_parser_heuristic {
             }
 
             return $date;
+        },
+    );
+    return $success;
+}
+
+=item initialize_formatter_for_arrayref()
+
+=cut
+
+sub initialize_formatter_for_arrayref {
+    my ($self, $definition) = @_;
+    my $structure = $definition->{'structure'} // 'arrayref';
+    my $params = $definition->{'params'} // die "Unable to create $structure formatter: No 'params' argument defined.";
+    # TODO: Validate parameters.
+    my $success = $self->add_formatter(
+        sub {
+            my ($date) = @_;
+            my @formatted = (
+                map
+                {
+                    # Use the value, if available.
+                    $date->{$_}
+                    //
+                    # Or see if we can determine the value by transforming another field.
+                    $self->transform_token_value(
+                        'target_token' => $_,
+                        'date'         => $date,
+                    )
+                    //
+                    # Or see if there is a default value for the field.
+                    $self->{'defaults'}->{$_}
+                    //
+                    # Or just use a value of empty string.
+                    ''
+                }
+                @$params,
+            );
+            return \@formatted if $structure eq 'arrayref';
+            return @formatted;
+        },
+    );
+    return $success;
+}
+
+=item initialize_formatter_for_hashref()
+
+=cut
+
+sub initialize_formatter_for_hashref {
+    my ($self, $definition) = @_;
+    my $structure = $definition->{'structure'} // 'hashref';
+    my $params = $definition->{'params'} // die "Unable to create $structure formatter: No 'params' argument defined.";
+    # TODO: Validate parameters.
+
+    $self->initialize_formatter_for_arrayref(
+        {
+            'structure' => 'arrayref',
+            'params'    => $params,
+        },
+    );
+
+    my $success = $self->add_formatter(
+        sub {
+            my ($date) = @_;
+            my %formatted = ();
+            @formatted{@$params} = @$date;
+            return \%formatted if $structure eq 'hashref';
+            return %formatted;
         },
     );
     return $success;
