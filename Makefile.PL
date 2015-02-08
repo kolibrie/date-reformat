@@ -7,7 +7,8 @@ all_from         'lib/Date/Reformat.pm';
 readme_pod_from  'lib/Date/Reformat.pm';
 
 # Specific dependencies
-test_requires  'Test::More'    => '0.88';
+test_requires  'Test::More'     => '0.88';
+test_requires  'Test::Warnings' => 0;
 auto_set_repository;
 
 WriteAll;
