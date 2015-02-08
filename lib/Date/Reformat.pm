@@ -1422,8 +1422,9 @@ sub format_date {
 sub reformat_date {
     my ($self, $date_string) = @_;
     my $date = $self->parse_date($date_string);
-    my $formatted = $self->format_date($date);
-    return $formatted;
+    my @formatted = $self->format_date($date);
+    return $formatted[0] if (scalar(@formatted) == 1);
+    return @formatted;
 };
 
 =back
