@@ -146,7 +146,11 @@ my $TOKENS = {
         'sprintf' => '%s',
     },
     'time_zone' => {
-        'regex'   => q|(?<time_zone>\w+(?:/\w+))|,
+        'regex'   => q/(?<time_zone>Z|UTC|[[:alpha:]]{3,}(?:\/[[:alpha:]]+)?)/,
+        'sprintf' => '%s',
+    },
+    'time_zone_offset' => {
+        'regex'   => q|(?<time_zone_offset>[-+]\d\d?(?:\d\d)?)|,
         'sprintf' => '%s',
     },
     'phrase' => {
@@ -247,8 +251,8 @@ my $DEFAULT_STRPTIME_MAPPINGS = {
     '%w' => 'day_of_week_0', # TODO
     '%Y' => 'year',
     '%y' => 'year_abbr',
-    '%Z' => 'time_zone', # TODO
-    '%z' => 'time_zone_offset', # TODO
+    '%Z' => 'time_zone',
+    '%z' => 'time_zone_offset',
 };
 
 my $DEFAULT_STRFTIME_MAPPINGS = {
@@ -948,7 +952,7 @@ sub initialize_parser_heuristic {
                 elsif ($part =~ /^$regex_for_string$/) {
                     # TODO: Look for time zone abbreviation.
                     my $token = $self->most_likely_token(
-                        'possible_tokens' => ['am_or_pm', 'era_abbr', 'month_name', 'month_abbr', 'day_name', 'day_abbr', 'phrase'],
+                        'possible_tokens' => ['am_or_pm', 'era_abbr', 'month_name', 'month_abbr', 'day_name', 'day_abbr', 'phrase', 'time_zone'],
                         'already_claimed' => $date,
                         'date_string'     => $date_string,
                         'value'           => $part,

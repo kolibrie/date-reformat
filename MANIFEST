@@ -9,6 +9,12 @@ inc/Module/Install/ReadmePodFromPod.pm
 inc/Module/Install/Repository.pm
 inc/Module/Install/Win32.pm
 inc/Module/Install/WriteAll.pm
+examples/benchmark_date_parse.pl
+examples/benchmark_date_reformat.pl
+examples/benchmark_datetime.pl
+examples/benchmark_reformat_datetime.pl
+examples/benchmark_reformat_time_moment.pl
+examples/benchmark_time_moment.pl
 lib/Date/Reformat.pm
 Makefile.PL
 MANIFEST

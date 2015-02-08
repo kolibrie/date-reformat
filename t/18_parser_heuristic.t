@@ -1448,6 +1448,23 @@ my @TESTS = (
             'day'         => '01',
         },
     },
+
+    # Testing for benchmark.
+    {
+        'date_string' => '2015-01-14 21:07:31Z',
+        'parser' => {
+            'heuristic' => 'ymd',
+        },
+        'expected' => {
+            'year'      => '2015',
+            'month'     => '01',
+            'day'       => '14',
+            'hour'      => '21',
+            'minute'    => '07',
+            'second'    => '31',
+            'time_zone' => 'Z',
+        },
+    },
 );
 
 

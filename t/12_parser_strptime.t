@@ -67,6 +67,21 @@ my @TESTS = (
             'second' => '31',
         },
     },
+    {
+        'date_string' => '2015-01-14 21:07:31Z',
+        'parser' => {
+            'strptime' => '%Y-%m-%d %H:%M:%S%Z',
+        },
+        'expected' => {
+            'year'      => '2015',
+            'month'     => '01',
+            'day'       => '14',
+            'hour'      => '21',
+            'minute'    => '07',
+            'second'    => '31',
+            'time_zone' => 'Z',
+        },
+    },
 );
 
 plan('tests' => scalar(@TESTS));
