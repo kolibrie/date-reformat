@@ -59,7 +59,7 @@ use 5.010000;
 use strict;
 use warnings;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 my $MONTH_LOOKUP = {
 };

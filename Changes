@@ -1,5 +1,8 @@
 Revision history for Perl extension Date::Reformat.
 
+0.02  Sat Feb  7 22:03:10 2015
+	- Basic functionality in place.
+
 0.01  Tue Jan 13 20:25:06 2015
 	- original version; created by h2xs 1.23 with options
 		-AX -b 5.10.0 -n Date::Reformat

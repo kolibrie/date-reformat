@@ -108,6 +108,21 @@ and structure specified.
 
 =cut
 
+=item initialize_formatter_for_arrayref()
+
+
+=cut
+
+=item initialize_formatter_for_hashref()
+
+
+=cut
+
+=item initialize_formatter_for_coderef()
+
+
+=cut
+
 =item initialize_formatter_for_sprintf()
 
 
@@ -129,6 +144,11 @@ and structure specified.
 =cut
 
 =item transform_token_value()
+
+
+=cut
+
+=item most_likely_token()
 
 
 =cut
