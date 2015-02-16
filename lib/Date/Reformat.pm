@@ -59,6 +59,9 @@ use 5.010000;
 use strict;
 use warnings;
 
+use Types::Standard qw(ClassName Object Optional slurpy Dict HashRef ArrayRef RegexpRef CodeRef Enum Str Int);
+use Type::Params qw();
+
 our $VERSION = '0.02';
 
 my $MONTH_LOOKUP = {
@@ -341,7 +344,17 @@ my $DEFAULT_TRANSFORMATIONS = {
 =cut
 
 sub new {
-    my ($class, %args) = @_;
+    state $check = Type::Params::compile(
+        ClassName,
+        slurpy Dict[
+            'debug'           => Optional[Int],
+            'parser'          => Optional[HashRef],
+            'formatter'       => Optional[HashRef],
+            'transformations' => Optional[ArrayRef[HashRef]],
+            'defaults'        => Optional[HashRef],
+        ],
+    );
+    my ($class, $args) = $check->(@_);
     my $self = bless {}, $class;
     foreach my $parameter (
         'debug',
@@ -351,8 +364,10 @@ sub new {
         'defaults',
     )
     {
+        next if ! defined $args->{$parameter};
+
         my $initialize = 'initialize_' . $parameter;
-        my @data = $self->$initialize($args{$parameter});
+        my @data = $self->$initialize($args->{$parameter});
 
         my $add = 'add_' . $parameter;
         $self->$add(@data);
@@ -365,8 +380,17 @@ sub new {
 =cut
 
 sub initialize_parser {
-    my ($self, $definition) = @_;
-    # TODO: Verify $definition is a hashref with one of the approved parser parameters (regex, strptime, etc.).
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'regex'     => Optional[RegexpRef],
+            'params'    => Optional[ArrayRef],
+            'strptime'  => Optional[Str],
+            'heuristic' => Optional[Enum[qw(ymd dmy mdy)]],
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
     if (defined($definition->{'regex'})) {
 
         # Initialize the right kind of regex parser (simple capture or named capture).
@@ -411,8 +435,18 @@ sub initialize_parser {
 =cut
 
 sub initialize_formatter {
-    my ($self, $definition) = @_;
-    # TODO: Verify $definition is a hashref with one of the approved formatter parameters (sprintf, strftime, etc.).
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'sprintf'        => Optional[Str],
+            'params'         => Optional[ArrayRef],
+            'strftime'       => Optional[Str],
+            'data_structure' => Optional[Enum[qw(hash hashref array arrayref)]],
+            'coderef'        => Optional[CodeRef],
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
     if (defined($definition->{'sprintf'})) {
         return $self->initialize_formatter_for_sprintf(
             {
@@ -430,20 +464,20 @@ sub initialize_formatter {
         );
     }
 
-    if (defined($definition->{'structure'})) {
-        if ($definition->{'structure'} =~ /^hash(?:ref)?$/) {
+    if (defined($definition->{'data_structure'})) {
+        if ($definition->{'data_structure'} =~ /^hash(?:ref)?$/) {
             return $self->initialize_formatter_for_hashref(
                 {
-                    'structure' => $definition->{'structure'},
+                    'structure' => $definition->{'data_structure'},
                     'params'    => $definition->{'params'},
                 },
             );
         }
 
-        if ($definition->{'structure'} =~ /^array(?:ref)?$/) {
+        if ($definition->{'data_structure'} =~ /^array(?:ref)?$/) {
             return $self->initialize_formatter_for_arrayref(
                 {
-                    'structure' => $definition->{'structure'},
+                    'structure' => $definition->{'data_structure'},
                     'params'    => $definition->{'params'},
                 },
             );
@@ -473,8 +507,18 @@ sub initialize_transformations {
 }
 
 sub add_transformations {
-    my ($self, $transformations) = @_;
-    # TODO: Verify $transformations is an arrayref.
+    state $check = Type::Params::compile(
+        Object,
+        ArrayRef[
+            Dict[
+                'to'             => Str,
+                'from'           => Str,
+                'transformation' => CodeRef,
+            ],
+        ],
+    );
+    my ($self, $transformations) = $check->(@_);
+
     my $count = 0;
     foreach my $t (@$transformations) {
         $self->{'transformations'}->{$t->{'to'}}->{$t->{'from'}} = $t->{'transformation'};
@@ -494,8 +538,12 @@ sub initialize_defaults {
 }
 
 sub add_defaults {
-    my ($self, $args) = @_;
-    # TODO: Verify $args is a hashref.
+    state $check = Type::Params::compile(
+        Object,
+        HashRef,
+    );
+    my ($self, $args) = $check->(@_);
+
     foreach my $token (keys %$args) {
         $self->{'defaults'}->{$token} = $args->{$token};
     }
@@ -512,8 +560,12 @@ sub initialize_debug {
 }
 
 sub add_debug {
-    my ($self, $value) = @_;
-    return $self->{'debug'} = $value // 0;
+    state $check = Type::Params::compile(
+        Object,
+        Int,
+    );
+    my ($self, $value) = $check->(@_);
+    return $self->{'debug'} = $value;
 }
 
 =item initialize_parser_for_regex_with_params()
@@ -521,12 +573,25 @@ sub add_debug {
 =cut
 
 sub initialize_parser_for_regex_with_params {
-    my ($self, $definition) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'regex'  => RegexpRef,
+            'params' => ArrayRef,
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
     my $regex = $definition->{'regex'};
     my $params = $definition->{'params'};
+
+    state $sub_check = Type::Params::compile(
+        Str,
+    );
+
     return (
         sub {
-            my ($date_string) = @_;
+            my ($date_string) = $sub_check->(@_);
             my (@components) = $date_string =~ $regex;
             return if ! @components;
             my %date = ();
@@ -542,11 +607,23 @@ sub initialize_parser_for_regex_with_params {
 =cut
 
 sub initialize_parser_for_regex_named_capture {
-    my ($self, $definition) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'regex' => RegexpRef,
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
     my $regex = $definition->{'regex'};
+
+    state $sub_check = Type::Params::compile(
+        Str,
+    );
+
     return (
         sub {
-            my ($date_string) = @_;
+            my ($date_string) = $sub_check->(@_);
             my $success = $date_string =~ $regex;
             return if ! $success;
             my %date = %+;
@@ -574,7 +651,14 @@ sub initialize_parser_for_regex_named_capture {
 =cut
 
 sub initialize_parser_for_strptime {
-    my ($self, $definition) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'strptime' => Str,
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
     my $strptime = $definition->{'strptime'};
     my $format = $strptime;
 
@@ -625,7 +709,14 @@ sub initialize_parser_for_strptime {
 =cut
 
 sub initialize_parser_heuristic {
-    my ($self, $definition) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'heuristic' => Enum[qw(ymd dmy mdy)],
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
     my $hint = $definition->{'heuristic'};
     my $known_parsers = {}; # Populated when we add a parser to the stack in front of this one.
     my $regex_for_date = qr{ \w+ [-/\.] \w+ (?:[-/\.] \w+) }x;
@@ -656,9 +747,14 @@ sub initialize_parser_heuristic {
         # anything else
         | ( . )
     }x;
+
+    state $sub_check = Type::Params::compile(
+        Str,
+    );
+
     return (
         sub {
-            my ($date_string) = @_;
+            my ($date_string) = $sub_check->(@_);
             my $order_string; # Will be set with ymd|dmy|mdy when we have enough information.
 
             # Split string into parts that can be identified later.
@@ -1053,13 +1149,25 @@ sub initialize_parser_heuristic {
 =cut
 
 sub initialize_formatter_for_arrayref {
-    my ($self, $definition) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'params'    => ArrayRef[Str],
+            'structure' => Optional[Enum[qw(array arrayref)]],
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
     my $structure = $definition->{'structure'} // 'arrayref';
-    my $params = $definition->{'params'} // die "Unable to create $structure formatter: No 'params' argument defined.";
-    # TODO: Validate parameters.
+    my $params = $definition->{'params'};
+
+    state $sub_check = Type::Params::compile(
+        HashRef,
+    );
+
     return (
         sub {
-            my ($date) = @_;
+            my ($date) = $sub_check->(@_);
             my @formatted = (
                 map
                 {
@@ -1091,10 +1199,17 @@ sub initialize_formatter_for_arrayref {
 =cut
 
 sub initialize_formatter_for_hashref {
-    my ($self, $definition) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'params'    => ArrayRef[Str],
+            'structure' => Optional[Enum[qw(hash hashref)]],
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
     my $structure = $definition->{'structure'} // 'hashref';
-    my $params = $definition->{'params'} // die "Unable to create $structure formatter: No 'params' argument defined.";
-    # TODO: Validate parameters.
+    my $params = $definition->{'params'};
 
     my @formatters = $self->initialize_formatter_for_arrayref(
         {
@@ -1103,9 +1218,13 @@ sub initialize_formatter_for_hashref {
         },
     );
 
+    state $sub_check = Type::Params::compile(
+        ArrayRef,
+    );
+
     push @formatters, (
         sub {
-            my ($date) = @_;
+            my ($date) = $sub_check->(@_);
             my %formatted = ();
             @formatted{@$params} = @$date;
             return \%formatted if $structure eq 'hashref';
@@ -1120,10 +1239,17 @@ sub initialize_formatter_for_hashref {
 =cut
 
 sub initialize_formatter_for_coderef {
-    my ($self, $definition) = @_;
-    my $coderef = $definition->{'coderef'} // sub { @_ };
-    my $params = $definition->{'params'} // die "Unable to create coderef formatter: No 'params' argument defined.";
-    # TODO: Validate parameters.
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'params'  => ArrayRef[Str],
+            'coderef' => CodeRef,
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
+    my $coderef = $definition->{'coderef'};
+    my $params = $definition->{'params'};
 
     my @formatters = $self->initialize_formatter_for_arrayref(
         {
@@ -1143,13 +1269,25 @@ sub initialize_formatter_for_coderef {
 =cut
 
 sub initialize_formatter_for_sprintf {
-    my ($self, $definition) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'params'  => ArrayRef[Str],
+            'sprintf' => Str,
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
     my $sprintf = $definition->{'sprintf'};
-    my $params = $definition->{'params'} // die "Unable to create sprintf formatter: No 'params' argument defined.";
-    # TODO: Validate parameters.
+    my $params = $definition->{'params'};
+
+    state $sub_check = Type::Params::compile(
+        HashRef,
+    );
+
     return (
         sub {
-            my ($date) = @_;
+            my ($date) = $sub_check->(@_);
             my $formatted = sprintf(
                 $sprintf,
                 map
@@ -1181,7 +1319,14 @@ sub initialize_formatter_for_sprintf {
 =cut
 
 sub initialize_formatter_for_strftime {
-    my ($self, $definition) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Dict[
+            'strftime' => Str,
+        ],
+    );
+    my ($self, $definition) = $check->(@_);
+
     my $strftime = $definition->{'strftime'};
     my $format = $strftime;
     my $params = [];
@@ -1239,7 +1384,12 @@ sub initialize_formatter_for_strftime {
 =cut
 
 sub strptime_token_to_regex {
-    my ($self, $token) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Str,
+    );
+    my ($self, $token) = $check->(@_);
+
     my $internal;
     say "Attempting to convert strptime token $token into a regex." if $self->{'debug'};
     if (defined($self->{'strptime_mappings'}->{$token})) {
@@ -1267,7 +1417,12 @@ sub strptime_token_to_regex {
 =cut
 
 sub strftime_token_to_internal {
-    my ($self, $token) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Str,
+    );
+    my ($self, $token) = $check->(@_);
+
     my $internal;
     say "Attempting to convert strftime token $token into an internal token." if $self->{'debug'};
     if (defined($self->{'strftime_mappings'}->{$token})) {
@@ -1301,9 +1456,17 @@ sub strftime_token_to_internal {
 =cut
 
 sub transform_token_value {
-    my ($self, %args) = @_;
-    my $target_token = $args{'target_token'};
-    my $date = $args{'date'};
+    state $check = Type::Params::compile(
+        Object,
+        slurpy Dict[
+            'target_token' => Str,
+            'date'         => HashRef,
+        ],
+    );
+    my ($self, $args) = $check->(@_);
+
+    my $target_token = $args->{'target_token'};
+    my $date = $args->{'date'};
 
     # Return the value, if it is already set.
     return $date->{$target_token} if defined($date->{$target_token});
@@ -1328,12 +1491,23 @@ sub transform_token_value {
 =cut
 
 sub most_likely_token {
-    my ($self, %args) = @_;
-    my $already_claimed = $args{'already_claimed'} // {};
-    my $possible_tokens = $args{'possible_tokens'} // return;
-    my $hint = $args{'heuristic'} // '';
-    my $date_part = $args{'value'} // return;
-    my $date_string = $args{'date_string'} // $date_part;
+    state $check = Type::Params::compile(
+        Object,
+        slurpy Dict[
+            'already_claimed' => Optional[HashRef],
+            'possible_tokens' => ArrayRef,
+            'heuristic'       => Optional[Str],
+            'value'           => Str,
+            'date_string'     => Optional[Str],
+        ],
+    );
+    my ($self, $args) = $check->(@_);
+
+    my $already_claimed = $args->{'already_claimed'} // {};
+    my $possible_tokens = $args->{'possible_tokens'};
+    my $hint = $args->{'heuristic'} // '';
+    my $date_part = $args->{'value'};
+    my $date_string = $args->{'date_string'} // $date_part;
 
     foreach my $token (@$possible_tokens) {
         if ($token eq 'day') {
@@ -1388,8 +1562,13 @@ sub most_likely_token {
 =cut
 
 sub add_parser {
-    my ($self, @parsers) = @_;
-    my $count = push @{ $self->{'active_parsers'} }, @parsers;
+    state $check = Type::Params::compile(
+        Object,
+        slurpy ArrayRef[CodeRef],
+    );
+    my ($self, $parsers) = $check->(@_);
+
+    my $count = push @{ $self->{'active_parsers'} }, @$parsers;
     return $count ? 1 : 0;
 }
 
@@ -1398,8 +1577,13 @@ sub add_parser {
 =cut
 
 sub add_formatter {
-    my ($self, @formatters) = @_;
-    my $count = push @{ $self->{'active_formatters'} }, @formatters;
+    state $check = Type::Params::compile(
+        Object,
+        slurpy ArrayRef[CodeRef],
+    );
+    my ($self, $formatters) = $check->(@_);
+
+    my $count = push @{ $self->{'active_formatters'} }, @$formatters;
     return $count ? 1 : 0;
 }
 
@@ -1408,10 +1592,19 @@ sub add_formatter {
 =cut
 
 sub parse_date {
-    my ($self, $date_string) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Str,
+    );
+    my ($self, $date_string) = $check->(@_);
+
+    state $has_parser = ArrayRef[CodeRef];
+    if (! $has_parser->($self->{'active_parsers'}) ) {
+        die "No parsers defined. Have you called initialize_parser()?";
+    }
+
     foreach my $parser (@{ $self->{'active_parsers'} }) {
         my $date = $parser->($date_string);
-        # TODO: Add formatting step here.
         return $date if defined($date);
     }
     # None of the parsers were able to extract the date components.
@@ -1423,7 +1616,17 @@ sub parse_date {
 =cut
 
 sub format_date {
-    my ($self, $date) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        HashRef,
+    );
+    my ($self, $date) = $check->(@_);
+
+    state $has_formatter = ArrayRef[CodeRef];
+    if (! $has_formatter->($self->{'active_formatters'}) ) {
+        die "No formatters defined. Have you called initialize_formatter()?";
+    }
+
     my @formatted = ($date);
     foreach my $formatter (@{ $self->{'active_formatters'} }) {
         @formatted = $formatter->(@formatted);
@@ -1437,7 +1640,12 @@ sub format_date {
 =cut
 
 sub reformat_date {
-    my ($self, $date_string) = @_;
+    state $check = Type::Params::compile(
+        Object,
+        Str,
+    );
+    my ($self, $date_string) = $check->(@_);
+
     my $date = $self->parse_date($date_string);
     my @formatted = $self->format_date($date);
     return $formatted[0] if (scalar(@formatted) == 1);

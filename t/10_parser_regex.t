@@ -78,9 +78,6 @@ foreach my $test (@TESTS) {
     # Set up the parser.
     my $parser = Date::Reformat->new(
         'parser'    => $test->{'parser'},
-        'formatter' => {
-            'data_structure' => 'hashref',
-        },
     );
 
     # Parse the date string.

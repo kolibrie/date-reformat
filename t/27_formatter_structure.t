@@ -10,8 +10,8 @@ my @TESTS = (
     {
         'expected' => [qw(2015 1 14 21 7 31)],
         'formatter' => {
-            'structure' => 'arrayref',
-            'params'    => [qw(year month day hour minute second)],
+            'data_structure' => 'arrayref',
+            'params'         => [qw(year month day hour minute second)],
         },
         'date' => {
             'year'   => '2015',
@@ -25,8 +25,8 @@ my @TESTS = (
     {
         'expected' => [qw(Wed Jan 14 21 7 31 2015)],
         'formatter' => {
-            'structure' => 'arrayref',
-            'params'    => [qw(day_abbr month_abbr day hour minute second year)],
+            'data_structure' => 'arrayref',
+            'params'         => [qw(day_abbr month_abbr day hour minute second year)],
         },
         'date' => {
             'day_abbr'    => 'Wed',
@@ -41,8 +41,8 @@ my @TESTS = (
     {
         'expected' => [qw(1 14 2015 9 7 31 pm)],
         'formatter' => {
-            'structure' => 'arrayref',
-            'params'    => [qw(month day year hour_12 minute second am_or_pm)],
+            'data_structure' => 'arrayref',
+            'params'         => [qw(month day year hour_12 minute second am_or_pm)],
         },
         'date' => {
             'month'    => '1',
@@ -64,8 +64,8 @@ my @TESTS = (
             'second' => '31',
         },
         'formatter' => {
-            'structure' => 'hashref',
-            'params'    => [qw(year month day hour minute second)],
+            'data_structure' => 'hashref',
+            'params'         => [qw(year month day hour minute second)],
         },
         'date' => {
             'year'   => '2015',
@@ -87,8 +87,8 @@ my @TESTS = (
             'year'        => '2015',
         },
         'formatter' => {
-            'structure' => 'hashref',
-            'params'    => [qw(day_abbr month_abbr day hour minute second year)],
+            'data_structure' => 'hashref',
+            'params'         => [qw(day_abbr month_abbr day hour minute second year)],
         },
         'date' => {
             'day_abbr'    => 'Wed',
@@ -111,8 +111,8 @@ my @TESTS = (
             'am_or_pm' => 'pm',
         },
         'formatter' => {
-            'structure' => 'hashref',
-            'params'    => [qw(month day year hour_12 minute second am_or_pm)],
+            'data_structure' => 'hashref',
+            'params'         => [qw(month day year hour_12 minute second am_or_pm)],
         },
         'date' => {
             'month'    => '1',
@@ -141,6 +141,6 @@ foreach my $test (@TESTS) {
     is_deeply(
         $reformatted,
         $test->{'expected'},
-        "Verify formatting for $test->{'formatter'}->{'structure'}: " . join(', ', @{$test->{'formatter'}->{'params'}}),
+        "Verify formatting for $test->{'formatter'}->{'data_structure'}: " . join(', ', @{$test->{'formatter'}->{'params'}}),
     );
 }
