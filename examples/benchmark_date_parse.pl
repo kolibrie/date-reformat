@@ -12,7 +12,7 @@ my $date_string = '2015-01-14 21:07:31Z';
 my $tests = [
     {
         'label'      => 'Parse string',
-        'iterations' => 10000,
+        'iterations' => 100000,
         'coderef'    => sub {
             my $test_output = Date::Parse::str2time($date_string);
         },
