@@ -351,8 +351,11 @@ sub new {
         'defaults',
     )
     {
-        my $method = 'initialize_' . $parameter;
-        $self->$method($args{$parameter});
+        my $initialize = 'initialize_' . $parameter;
+        my @data = $self->$initialize($args{$parameter});
+
+        my $add = 'add_' . $parameter;
+        $self->$add(@data);
     }
     return $self;
 }
@@ -466,6 +469,11 @@ sub initialize_formatter {
 
 sub initialize_transformations {
     my ($self, $transformations) = @_;
+    return $transformations // [];
+}
+
+sub add_transformations {
+    my ($self, $transformations) = @_;
     # TODO: Verify $transformations is an arrayref.
     my $count = 0;
     foreach my $t (@$transformations) {
@@ -481,8 +489,17 @@ sub initialize_transformations {
 
 sub initialize_defaults {
     my ($self, $args) = @_;
+    $self->{'defaults'} = {};
+    return $args;
+}
+
+sub add_defaults {
+    my ($self, $args) = @_;
     # TODO: Verify $args is a hashref.
-    return $self->{'defaults'} = $args // {};
+    foreach my $token (keys %$args) {
+        $self->{'defaults'}->{$token} = $args->{$token};
+    }
+    return $self->{'defaults'};
 }
 
 =item initialize_debug()
@@ -490,6 +507,11 @@ sub initialize_defaults {
 =cut
 
 sub initialize_debug {
+    my ($self, $value) = @_;
+    return $value // 0;
+}
+
+sub add_debug {
     my ($self, $value) = @_;
     return $self->{'debug'} = $value // 0;
 }
@@ -502,7 +524,7 @@ sub initialize_parser_for_regex_with_params {
     my ($self, $definition) = @_;
     my $regex = $definition->{'regex'};
     my $params = $definition->{'params'};
-    my $success = $self->add_parser(
+    return (
         sub {
             my ($date_string) = @_;
             my (@components) = $date_string =~ $regex;
@@ -513,7 +535,6 @@ sub initialize_parser_for_regex_with_params {
             return \%date;
         },
     );
-    return $success;
 }
 
 =item initialize_parser_for_regex_named_capture()
@@ -523,7 +544,7 @@ sub initialize_parser_for_regex_with_params {
 sub initialize_parser_for_regex_named_capture {
     my ($self, $definition) = @_;
     my $regex = $definition->{'regex'};
-    my $success = $self->add_parser(
+    return (
         sub {
             my ($date_string) = @_;
             my $success = $date_string =~ $regex;
@@ -546,7 +567,6 @@ sub initialize_parser_for_regex_named_capture {
             return \%date;
         },
     );
-    return $success;
 }
 
 =item initialize_parser_for_strptime()
@@ -593,12 +613,11 @@ sub initialize_parser_for_strptime {
     }
 
     say "Crafted regex: $strptime -> $format" if $self->{'debug'};
-    my $success = $self->initialize_parser_for_regex_named_capture(
+    return $self->initialize_parser_for_regex_named_capture(
         {
             'regex' => qr/$format/,
         },
     );
-    return $success;
 }
 
 =item initialize_parser_heuristic()
@@ -637,7 +656,7 @@ sub initialize_parser_heuristic {
         # anything else
         | ( . )
     }x;
-    my $success = $self->add_parser(
+    return (
         sub {
             my ($date_string) = @_;
             my $order_string; # Will be set with ymd|dmy|mdy when we have enough information.
@@ -1008,10 +1027,12 @@ sub initialize_parser_heuristic {
             # Add a new parser that will match this date format.
             if (! defined($known_parsers->{$parser_regex}) ) {
                 $known_parsers->{$parser_regex} = 1;
-                $self->initialize_parser_for_regex_named_capture(
-                    {
-                        'regex' => qr/$parser_regex/,
-                    },
+                $self->add_parser(
+                    $self->initialize_parser_for_regex_named_capture(
+                        {
+                            'regex' => qr/$parser_regex/,
+                        },
+                    ),
                 );
                 # Move the heuristic parser to the last slot again.
                 push(
@@ -1025,7 +1046,6 @@ sub initialize_parser_heuristic {
             return $date;
         },
     );
-    return $success;
 }
 
 =item initialize_formatter_for_arrayref()
@@ -1037,7 +1057,7 @@ sub initialize_formatter_for_arrayref {
     my $structure = $definition->{'structure'} // 'arrayref';
     my $params = $definition->{'params'} // die "Unable to create $structure formatter: No 'params' argument defined.";
     # TODO: Validate parameters.
-    my $success = $self->add_formatter(
+    return (
         sub {
             my ($date) = @_;
             my @formatted = (
@@ -1064,7 +1084,6 @@ sub initialize_formatter_for_arrayref {
             return @formatted;
         },
     );
-    return $success;
 }
 
 =item initialize_formatter_for_hashref()
@@ -1077,14 +1096,14 @@ sub initialize_formatter_for_hashref {
     my $params = $definition->{'params'} // die "Unable to create $structure formatter: No 'params' argument defined.";
     # TODO: Validate parameters.
 
-    $self->initialize_formatter_for_arrayref(
+    my @formatters = $self->initialize_formatter_for_arrayref(
         {
             'structure' => 'arrayref',
             'params'    => $params,
         },
     );
 
-    my $success = $self->add_formatter(
+    push @formatters, (
         sub {
             my ($date) = @_;
             my %formatted = ();
@@ -1093,7 +1112,7 @@ sub initialize_formatter_for_hashref {
             return %formatted;
         },
     );
-    return $success;
+    return @formatters;
 }
 
 =item initialize_formatter_for_coderef()
@@ -1106,17 +1125,17 @@ sub initialize_formatter_for_coderef {
     my $params = $definition->{'params'} // die "Unable to create coderef formatter: No 'params' argument defined.";
     # TODO: Validate parameters.
 
-    $self->initialize_formatter_for_arrayref(
+    my @formatters = $self->initialize_formatter_for_arrayref(
         {
             'structure' => 'array',
             'params'    => $params,
         },
     );
 
-    my $success = $self->add_formatter(
+    push @formatters, (
         $coderef,
     );
-    return $success;
+    return @formatters;
 }
 
 =item initialize_formatter_for_sprintf()
@@ -1128,7 +1147,7 @@ sub initialize_formatter_for_sprintf {
     my $sprintf = $definition->{'sprintf'};
     my $params = $definition->{'params'} // die "Unable to create sprintf formatter: No 'params' argument defined.";
     # TODO: Validate parameters.
-    my $success = $self->add_formatter(
+    return (
         sub {
             my ($date) = @_;
             my $formatted = sprintf(
@@ -1155,7 +1174,6 @@ sub initialize_formatter_for_sprintf {
             return $formatted;
         },
     );
-    return $success;
 }
 
 =item initialize_formatter_for_strftime()
@@ -1208,13 +1226,12 @@ sub initialize_formatter_for_strftime {
     }
 
     say "Crafted sprintf: $strftime -> $format [" . join(', ', @$params) . "]" if $self->{'debug'};
-    my $success = $self->initialize_formatter_for_sprintf(
+    return $self->initialize_formatter_for_sprintf(
         {
             'sprintf' => $format,
             'params'  => $params,
         },
     );
-    return $success;
 }
 
 =item strptime_token_to_regex()
@@ -1371,8 +1388,8 @@ sub most_likely_token {
 =cut
 
 sub add_parser {
-    my ($self, $parser) = @_;
-    my $count = push @{ $self->{'active_parsers'} }, $parser;
+    my ($self, @parsers) = @_;
+    my $count = push @{ $self->{'active_parsers'} }, @parsers;
     return $count ? 1 : 0;
 }
 
@@ -1381,8 +1398,8 @@ sub add_parser {
 =cut
 
 sub add_formatter {
-    my ($self, $formatter) = @_;
-    my $count = push @{ $self->{'active_formatters'} }, $formatter;
+    my ($self, @formatters) = @_;
+    my $count = push @{ $self->{'active_formatters'} }, @formatters;
     return $count ? 1 : 0;
 }
 
