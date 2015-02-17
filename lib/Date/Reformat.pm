@@ -59,7 +59,7 @@ use 5.010000;
 use strict;
 use warnings;
 
-use Types::Standard qw(ClassName Object Optional slurpy Dict HashRef ArrayRef RegexpRef CodeRef Enum Str Int);
+use Types::Standard qw(ClassName Object Maybe Optional slurpy Dict HashRef ArrayRef RegexpRef CodeRef Enum Str Int);
 use Type::Params qw();
 
 our $VERSION = '0.02';
@@ -356,8 +356,10 @@ sub new {
     );
     my ($class, $args) = $check->(@_);
     my $self = bless {}, $class;
+
+    $self->debug($args->{'debug'});
+
     foreach my $parameter (
-        'debug',
         'parser',
         'formatter',
         'transformations',
@@ -550,22 +552,18 @@ sub add_defaults {
     return $self->{'defaults'};
 }
 
-=item initialize_debug()
+=item debug()
 
 =cut
 
-sub initialize_debug {
-    my ($self, $value) = @_;
-    return $value // 0;
-}
-
-sub add_debug {
+sub debug {
     state $check = Type::Params::compile(
         Object,
-        Int,
+        Maybe[Int],
     );
     my ($self, $value) = $check->(@_);
-    return $self->{'debug'} = $value;
+    $self->{'debug'} = $value if (defined $value);
+    return $self->{'debug'} //= 0;
 }
 
 =item initialize_parser_for_regex_with_params()
