@@ -1616,9 +1616,11 @@ sub parse_date {
 sub format_date {
     state $check = Type::Params::compile(
         Object,
-        HashRef,
+        Maybe[HashRef],
     );
     my ($self, $date) = $check->(@_);
+
+    return if ! defined($date);
 
     state $has_formatter = ArrayRef[CodeRef];
     if (! $has_formatter->($self->{'active_formatters'}) ) {
