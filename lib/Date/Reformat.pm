@@ -8,7 +8,7 @@ Date::Reformat - Rearrange date strings
 
     use Date::Reformat;
 
-    my $parser = Date::Reformat->new(
+    my $reformat = Date::Reformat->new(
         parser => {
             regex  => qr/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)$/,
             params => [qw(year month day hour minute second)],
@@ -29,7 +29,7 @@ Date::Reformat - Rearrange date strings
         },
     );
 
-    my $parser = Date::Reformat->new(
+    my $reformat = Date::Reformat->new(
         parser => {
             strptime => '%Y-%m-%dT%M:%H:%S',
             # or heuristic => 'ymd', # http://www.postgresql.org/docs/9.2/static/datetime-input-rules.html
@@ -45,7 +45,7 @@ Date::Reformat - Rearrange date strings
         },
     );
 
-    my $reformatted_string = $parser->reformat_date($date_string);
+    my $reformatted_string = $reformat->reformat_date($date_string);
 
 =head1 DESCRIPTION
 
@@ -341,6 +341,53 @@ my $DEFAULT_TRANSFORMATIONS = {
 
 =item new()
 
+Returns a new reformatter instance.
+
+    my $reformat = Date::Reformat->new(
+        'parser'          => $parsing_instructions,
+        'transformations' => $transformation_instructions,
+        'defaults'        => $default_values,
+        'formatter'       => $formatting_instructions,
+        'debug'           => 0,
+    );
+
+Parameters:
+
+=over 4
+
+=item parser
+
+A hashref of instructions used to initialize a parser.
+
+See L</"initialize_parser()"> for details.
+
+=item transformations
+
+An arrayref of hashrefs containing instructions on how to
+convert values of one token into values for another token
+(such as C<month_abbr> to C<month>).
+
+See L</"initialize_transformations()"> for details.
+
+=item defaults
+
+A hashref specifying values to use if the date string does
+not contain a specific token (such as a time_zone value).
+
+See L</"initialize_defaults()"> for details.
+
+=item formatter
+
+A hashref of instructions used to initialize a formatter.
+
+See L</"initialize_formatter()"> for details.
+
+=item debug
+
+Either a 1 or a 0, to turn debugging on or off, respectively.
+
+=back
+
 =cut
 
 sub new {
@@ -378,6 +425,77 @@ sub new {
 }
 
 =item initialize_parser()
+
+Builds a parser based on the given instructions.  To add it to
+the currently active parsers, see L</"add_parser()">.
+
+If several parsers are active, the first one to successfully parse
+the current date string returns the results of the parse, and subsequent
+parsers are not utilized.  See L</"parse_date()"> for more information.
+
+The types of parsers that can be initialized via this method are:
+
+=over 4
+
+=item regex
+
+The regex must specify what parts should be captured, and a list
+of token names must be supplied to identify which token each captured
+value will be assigned to.
+
+    $reformat->initialize_parser(
+        {
+            regex  => qr/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)$/,
+            params => [qw(year month day hour minute second)],
+        },
+    );
+
+=item regex with named capture
+
+The regex must specify what parts should be captured, using named
+capture syntax.
+
+    $reformat->initialize_parser(
+        {
+            regex  => qr/^(?<year>\d{4})-(?<month>\d\d)-(?<day>\d\d) (?<hour>\d\d?):(?<minute>\d\d):(?<second>\d\d)$/,
+        },
+    );
+
+=item strptime
+
+The format string must be in strptime() format.
+
+    $reformat->initialize_parser(
+        {
+            strptime => '%Y-%m-%dT%M:%H:%S',
+        },
+    );
+
+=item heuristic
+
+A hint must be provided that will help the parser determine the meaning
+of numbers if the ordering is ambiguous.
+
+Currently the heuristic parsing mimics the PostgreSQL date parser (though
+I have not copied over all the test cases from the PostgreSQL regression
+tests, so there are likely to be differences/flaws).
+
+    $reformat->initialize_parser(
+        {
+            heuristic => 'ymd',  # or 'mdy' or 'dmy'
+        },
+    );
+
+Currently when the heuristic parser parses a date string, it creates a
+named regex parser which it injects into the active parsers directly in
+front of itself, so that subsequent date strings that are in the same
+format will be parsed via the regex.
+
+I plan to add a parameter that will control whether parsers are generated
+by the heuristic parser (I also plan to refactor that method quite a bit,
+because it kind of makes me cringe to look at it).
+
+=back
 
 =cut
 
@@ -433,6 +551,79 @@ sub initialize_parser {
 }
 
 =item initialize_formatter()
+
+Builds a formatter based on the given instructions.  To add it to the
+currently active formatters, see L</"add_formatter">.
+
+If several formatters are active, they are each called in turn, receiving
+the output from the previous parser.
+
+The types of parsers that can be initialized via this method are:
+
+=over 4
+
+=item sprintf
+
+The format string must be in sprintf() format, and a list of token names
+must be supplied to identify which token values to send to the formatter.
+
+    $reformat->initialize_formatter(
+        {
+            sprintf => '%s-%02d-%02dT%02d:%02d:02d %s',
+            params  => [qw(year month day hour minute second time_zone)],
+        },
+    );
+
+=item strftime
+
+The format string must be in strftime() format.
+
+    $reformat->initialize_formatter(
+        {
+            strftime => '%Y-%m-%dT%M:%H:%S %Z',
+        },
+    );
+
+=item data_structure
+
+The type of the desired data structure must be specified, and a list of
+token names to identify which token values to include in the data structure.
+
+Valid data structure types are:
+
+=over 4
+
+=item hash
+
+=item hashref
+
+=item array
+
+=item arrayref
+
+=back
+
+    $reformat->initialize_formatter(
+        {
+            data_structure => 'hashref',
+            params         => [qw(year month day hour minute second time_zone)],
+        },
+    );
+
+=item coderef
+
+The supplied coderef will be passed the token values specified.  Whatever the
+coderef returns will be passed to the next active formatter, or will be returned,
+if this is the final formatter.
+
+    $reformat->initialize_formatter(
+        {
+            coderef => sub { my ($y, $m, $d) = @_; DateTime->new(year => $y, month => $m, day => $d) },
+            params  => [qw(year month day)],
+        },
+    );
+
+=back
 
 =cut
 
