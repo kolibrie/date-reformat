@@ -53,6 +53,14 @@ This module aims to be a lightweight and flexible tool for rearranging
 components of a date string, then returning the components in the order
 and structure specified.
 
+My motivation was a month of trying to compare data from spreadsheets from
+several sources, and every single one used a different date format, which
+made comparison difficult.
+
+There are so many modules for doing date math, or parsing a specific date
+format.  I needed something that could take in pretty much any format
+and turn it into a single format that I could then use for comparison.
+
 =cut
 
 use 5.010000;
@@ -692,12 +700,75 @@ sub initialize_formatter {
 
 =item initialize_transformations()
 
+Accepts an arrayref of hashrefs that specify how to transform
+token values from one token type to another.
+
+Returns the same arrayref.  To add it to the currently active
+transformers, see L</"add_transformations">.
+
 =cut
 
 sub initialize_transformations {
     my ($self, $transformations) = @_;
     return $transformations // [];
 }
+
+=item add_transformations()
+
+Accepts an arrayref of hashrefs that specify how to transform
+token values from one token type to another.  Adds each
+transformation instruction to the list of active transformers.
+A transformation instruction with the same C<to> and C<from>
+values as a previous instruction will overwrite the previous
+version.
+
+    $reformat->add_transformations(
+        [
+            {
+                'to'             => 'hour',
+                'from'           => 'hour_12',
+                'transformation' => sub {
+                    my ($date) = @_;
+                    # Use the value of $date->{'hour_12'} (and $date->{'am_or_pm'})
+                    # to calculate what the value of $date->{'hour'} should be.
+                    # ...
+                    return $hour;
+                },
+            },
+        ],
+    );
+
+The values in each hashref are:
+
+=over 4
+
+=item to
+
+The name of the token type that is desired (for instance
+'hour', meaning the 24-hour format).
+
+=item from
+
+The name of the token type that is available in the date
+string (for instance 'hour_12', meaning the 12-hour format).
+
+=item transformation
+
+A coderef which accepts a hashref containing the information
+which has been parsed out of the date string.  The coderef
+is expected to examine the date information, transform the
+token type specified via C<from> into the correct value for the
+token type specified via C<to>, and return that value.
+
+=back
+
+Several transformations have been built into this module.
+Search for C<$DEFAULT_TRANSFORMATIONS> in the source code.
+
+Transformations added via this method will take precedence
+over built-in transformations.
+
+=cut
 
 sub add_transformations {
     state $check = Type::Params::compile(
@@ -722,6 +793,15 @@ sub add_transformations {
 
 =item initialize_defaults()
 
+Accepts a hashref of default values to use when transforming
+or formatting a date which is missing tokens that are needed.
+
+This method clears out any defaults which had been set
+previously.
+
+Returns the same hashref it was given, but does not set them.
+To add defaults, see L</"add_defaults">.
+
 =cut
 
 sub initialize_defaults {
@@ -729,6 +809,23 @@ sub initialize_defaults {
     $self->{'defaults'} = {};
     return $args;
 }
+
+=item add_defaults()
+
+Accepts a hashref of default values to use when transforming
+or formatting a date which is missing tokens that are needed.
+
+Each key should be the name of a token, and the corresponding
+value is the default value that will be used when a date is
+missing that token.
+
+    $reformat->add_defaults(
+        {
+            'time_zone' => 'America/New_York',
+        },
+    );
+
+=cut
 
 sub add_defaults {
     state $check = Type::Params::compile(
@@ -745,6 +842,14 @@ sub add_defaults {
 
 =item debug()
 
+Turns debugging statements on or off, or returns the
+current debug setting.
+
+Expects a true value to turn debugging on, and a false value
+to turn debugging off.
+
+    $reformat->debug(1);  # or 0
+
 =cut
 
 sub debug {
@@ -758,6 +863,8 @@ sub debug {
 }
 
 =item initialize_parser_for_regex_with_params()
+
+Internal method called by L</"initialize_parser()">.
 
 =cut
 
@@ -792,6 +899,8 @@ sub initialize_parser_for_regex_with_params {
 }
 
 =item initialize_parser_for_regex_named_capture()
+
+Internal method called by L</"initialize_parser()">.
 
 =cut
 
@@ -836,6 +945,8 @@ sub initialize_parser_for_regex_named_capture {
 }
 
 =item initialize_parser_for_strptime()
+
+Internal method called by L</"initialize_parser()">.
 
 =cut
 
@@ -894,6 +1005,8 @@ sub initialize_parser_for_strptime {
 }
 
 =item initialize_parser_heuristic()
+
+Internal method called by L</"initialize_parser()">.
 
 =cut
 
@@ -1335,6 +1448,8 @@ sub initialize_parser_heuristic {
 
 =item initialize_formatter_for_arrayref()
 
+Internal method called by L</"initialize_formatter()">.
+
 =cut
 
 sub initialize_formatter_for_arrayref {
@@ -1385,6 +1500,8 @@ sub initialize_formatter_for_arrayref {
 
 =item initialize_formatter_for_hashref()
 
+Internal method called by L</"initialize_formatter()">.
+
 =cut
 
 sub initialize_formatter_for_hashref {
@@ -1425,6 +1542,8 @@ sub initialize_formatter_for_hashref {
 
 =item initialize_formatter_for_coderef()
 
+Internal method called by L</"initialize_formatter()">.
+
 =cut
 
 sub initialize_formatter_for_coderef {
@@ -1454,6 +1573,8 @@ sub initialize_formatter_for_coderef {
 }
 
 =item initialize_formatter_for_sprintf()
+
+Internal method called by L</"initialize_formatter()">.
 
 =cut
 
@@ -1504,6 +1625,8 @@ sub initialize_formatter_for_sprintf {
 }
 
 =item initialize_formatter_for_strftime()
+
+Internal method called by L</"initialize_formatter()">.
 
 =cut
 
@@ -1570,6 +1693,8 @@ sub initialize_formatter_for_strftime {
 
 =item strptime_token_to_regex()
 
+Internal method called by L</"initialize_parser()">.
+
 =cut
 
 sub strptime_token_to_regex {
@@ -1602,6 +1727,8 @@ sub strptime_token_to_regex {
 }
 
 =item strftime_token_to_internal
+
+Internal method called by L</"initialize_formatter()">.
 
 =cut
 
@@ -1642,6 +1769,8 @@ sub strftime_token_to_internal {
 
 =item transform_token_value()
 
+Internal method called by L</"initialize_formatter()">.
+
 =cut
 
 sub transform_token_value {
@@ -1676,6 +1805,8 @@ sub transform_token_value {
 }
 
 =item most_likely_token()
+
+Internal method called by L</"initialize_parser()">.
 
 =cut
 
