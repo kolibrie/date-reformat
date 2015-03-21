@@ -367,7 +367,7 @@ Parameters:
 
 A hashref of instructions used to initialize a parser.
 
-See L</"initialize_parser()"> for details.
+See L</"prepare_parser()"> for details.
 
 =item transformations
 
@@ -375,20 +375,20 @@ An arrayref of hashrefs containing instructions on how to
 convert values of one token into values for another token
 (such as C<month_abbr> to C<month>).
 
-See L</"initialize_transformations()"> for details.
+See L</"prepare_transformations()"> for details.
 
 =item defaults
 
 A hashref specifying values to use if the date string does
 not contain a specific token (such as a time_zone value).
 
-See L</"initialize_defaults()"> for details.
+See L</"prepare_defaults()"> for details.
 
 =item formatter
 
 A hashref of instructions used to initialize a formatter.
 
-See L</"initialize_formatter()"> for details.
+See L</"prepare_formatter()"> for details.
 
 =item debug
 
@@ -423,7 +423,7 @@ sub new {
     {
         next if ! defined $args->{$parameter};
 
-        my $initialize = 'initialize_' . $parameter;
+        my $initialize = 'prepare_' . $parameter;
         my @data = $self->$initialize($args->{$parameter});
 
         my $add = 'add_' . $parameter;
@@ -432,7 +432,7 @@ sub new {
     return $self;
 }
 
-=item initialize_parser()
+=item prepare_parser()
 
 Builds a parser based on the given instructions.  To add it to
 the currently active parsers, see L</"add_parser()">.
@@ -451,7 +451,7 @@ The regex must specify what parts should be captured, and a list
 of token names must be supplied to identify which token each captured
 value will be assigned to.
 
-    $reformat->initialize_parser(
+    $reformat->prepare_parser(
         {
             regex  => qr/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)$/,
             params => [qw(year month day hour minute second)],
@@ -463,7 +463,7 @@ value will be assigned to.
 The regex must specify what parts should be captured, using named
 capture syntax.
 
-    $reformat->initialize_parser(
+    $reformat->prepare_parser(
         {
             regex  => qr/^(?<year>\d{4})-(?<month>\d\d)-(?<day>\d\d) (?<hour>\d\d?):(?<minute>\d\d):(?<second>\d\d)$/,
         },
@@ -473,7 +473,7 @@ capture syntax.
 
 The format string must be in strptime() format.
 
-    $reformat->initialize_parser(
+    $reformat->prepare_parser(
         {
             strptime => '%Y-%m-%dT%M:%H:%S',
         },
@@ -488,7 +488,7 @@ Currently the heuristic parsing mimics the PostgreSQL date parser (though
 I have not copied over all the test cases from the PostgreSQL regression
 tests, so there are likely to be differences/flaws).
 
-    $reformat->initialize_parser(
+    $reformat->prepare_parser(
         {
             heuristic => 'ymd',  # or 'mdy' or 'dmy'
         },
@@ -507,7 +507,7 @@ because it kind of makes me cringe to look at it).
 
 =cut
 
-sub initialize_parser {
+sub prepare_parser {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -523,14 +523,14 @@ sub initialize_parser {
 
         # Initialize the right kind of regex parser (simple capture or named capture).
         if (defined($definition->{'params'})) {
-            return $self->initialize_parser_for_regex_with_params(
+            return $self->prepare_parser_for_regex_with_params(
                 {
                     'regex'  => $definition->{'regex'},
                     'params' => $definition->{'params'},
                 }
             );
         }
-        return $self->initialize_parser_for_regex_named_capture(
+        return $self->prepare_parser_for_regex_named_capture(
             {
                 'regex' => $definition->{'regex'},
             },
@@ -539,7 +539,7 @@ sub initialize_parser {
     }
 
     if (defined($definition->{'strptime'})) {
-        return $self->initialize_parser_for_strptime(
+        return $self->prepare_parser_for_strptime(
             {
                 'strptime' => $definition->{'strptime'},
             },
@@ -547,7 +547,7 @@ sub initialize_parser {
     }
 
     if (defined($definition->{'heuristic'})) {
-        return $self->initialize_parser_heuristic(
+        return $self->prepare_parser_heuristic(
             {
                 'heuristic' => $definition->{'heuristic'},
             },
@@ -558,7 +558,7 @@ sub initialize_parser {
     return;
 }
 
-=item initialize_formatter()
+=item prepare_formatter()
 
 Builds a formatter based on the given instructions.  To add it to the
 currently active formatters, see L</"add_formatter">.
@@ -575,7 +575,7 @@ The types of parsers that can be initialized via this method are:
 The format string must be in sprintf() format, and a list of token names
 must be supplied to identify which token values to send to the formatter.
 
-    $reformat->initialize_formatter(
+    $reformat->prepare_formatter(
         {
             sprintf => '%s-%02d-%02dT%02d:%02d:02d %s',
             params  => [qw(year month day hour minute second time_zone)],
@@ -586,7 +586,7 @@ must be supplied to identify which token values to send to the formatter.
 
 The format string must be in strftime() format.
 
-    $reformat->initialize_formatter(
+    $reformat->prepare_formatter(
         {
             strftime => '%Y-%m-%dT%M:%H:%S %Z',
         },
@@ -611,7 +611,7 @@ Valid data structure types are:
 
 =back
 
-    $reformat->initialize_formatter(
+    $reformat->prepare_formatter(
         {
             data_structure => 'hashref',
             params         => [qw(year month day hour minute second time_zone)],
@@ -624,7 +624,7 @@ The supplied coderef will be passed the token values specified.  Whatever the
 coderef returns will be passed to the next active formatter, or will be returned,
 if this is the final formatter.
 
-    $reformat->initialize_formatter(
+    $reformat->prepare_formatter(
         {
             coderef => sub { my ($y, $m, $d) = @_; DateTime->new(year => $y, month => $m, day => $d) },
             params  => [qw(year month day)],
@@ -635,7 +635,7 @@ if this is the final formatter.
 
 =cut
 
-sub initialize_formatter {
+sub prepare_formatter {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -649,7 +649,7 @@ sub initialize_formatter {
     my ($self, $definition) = $check->(@_);
 
     if (defined($definition->{'sprintf'})) {
-        return $self->initialize_formatter_for_sprintf(
+        return $self->prepare_formatter_for_sprintf(
             {
                 'sprintf' => $definition->{'sprintf'},
                 'params'  => $definition->{'params'},
@@ -658,7 +658,7 @@ sub initialize_formatter {
     }
 
     if (defined($definition->{'strftime'})) {
-        return $self->initialize_formatter_for_strftime(
+        return $self->prepare_formatter_for_strftime(
             {
                 'strftime' => $definition->{'strftime'},
             },
@@ -667,7 +667,7 @@ sub initialize_formatter {
 
     if (defined($definition->{'data_structure'})) {
         if ($definition->{'data_structure'} =~ /^hash(?:ref)?$/) {
-            return $self->initialize_formatter_for_hashref(
+            return $self->prepare_formatter_for_hashref(
                 {
                     'structure' => $definition->{'data_structure'},
                     'params'    => $definition->{'params'},
@@ -676,7 +676,7 @@ sub initialize_formatter {
         }
 
         if ($definition->{'data_structure'} =~ /^array(?:ref)?$/) {
-            return $self->initialize_formatter_for_arrayref(
+            return $self->prepare_formatter_for_arrayref(
                 {
                     'structure' => $definition->{'data_structure'},
                     'params'    => $definition->{'params'},
@@ -686,7 +686,7 @@ sub initialize_formatter {
     }
 
     if (defined($definition->{'coderef'})) {
-        return $self->initialize_formatter_for_coderef(
+        return $self->prepare_formatter_for_coderef(
             {
                 'coderef' => $definition->{'coderef'},
                 'params'  => $definition->{'params'},
@@ -698,7 +698,7 @@ sub initialize_formatter {
     return;
 }
 
-=item initialize_transformations()
+=item prepare_transformations()
 
 Accepts an arrayref of hashrefs that specify how to transform
 token values from one token type to another.
@@ -708,7 +708,7 @@ transformers, see L</"add_transformations">.
 
 =cut
 
-sub initialize_transformations {
+sub prepare_transformations {
     my ($self, $transformations) = @_;
     return $transformations // [];
 }
@@ -791,7 +791,7 @@ sub add_transformations {
     return $count;
 }
 
-=item initialize_defaults()
+=item prepare_defaults()
 
 Accepts a hashref of default values to use when transforming
 or formatting a date which is missing tokens that are needed.
@@ -804,7 +804,7 @@ To add defaults, see L</"add_defaults">.
 
 =cut
 
-sub initialize_defaults {
+sub prepare_defaults {
     my ($self, $args) = @_;
     $self->{'defaults'} = {};
     return $args;
@@ -862,13 +862,13 @@ sub debug {
     return $self->{'debug'} //= 0;
 }
 
-=item initialize_parser_for_regex_with_params()
+=item prepare_parser_for_regex_with_params()
 
-Internal method called by L</"initialize_parser()">.
+Internal method called by L</"prepare_parser()">.
 
 =cut
 
-sub initialize_parser_for_regex_with_params {
+sub prepare_parser_for_regex_with_params {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -898,13 +898,13 @@ sub initialize_parser_for_regex_with_params {
     );
 }
 
-=item initialize_parser_for_regex_named_capture()
+=item prepare_parser_for_regex_named_capture()
 
-Internal method called by L</"initialize_parser()">.
+Internal method called by L</"prepare_parser()">.
 
 =cut
 
-sub initialize_parser_for_regex_named_capture {
+sub prepare_parser_for_regex_named_capture {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -944,13 +944,13 @@ sub initialize_parser_for_regex_named_capture {
     );
 }
 
-=item initialize_parser_for_strptime()
+=item prepare_parser_for_strptime()
 
-Internal method called by L</"initialize_parser()">.
+Internal method called by L</"prepare_parser()">.
 
 =cut
 
-sub initialize_parser_for_strptime {
+sub prepare_parser_for_strptime {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -997,20 +997,20 @@ sub initialize_parser_for_strptime {
     }
 
     say "Crafted regex: $strptime -> $format" if $self->{'debug'};
-    return $self->initialize_parser_for_regex_named_capture(
+    return $self->prepare_parser_for_regex_named_capture(
         {
             'regex' => qr/$format/,
         },
     );
 }
 
-=item initialize_parser_heuristic()
+=item prepare_parser_heuristic()
 
-Internal method called by L</"initialize_parser()">.
+Internal method called by L</"prepare_parser()">.
 
 =cut
 
-sub initialize_parser_heuristic {
+sub prepare_parser_heuristic {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -1426,7 +1426,7 @@ sub initialize_parser_heuristic {
             if (! defined($known_parsers->{$parser_regex}) ) {
                 $known_parsers->{$parser_regex} = 1;
                 $self->add_parser(
-                    $self->initialize_parser_for_regex_named_capture(
+                    $self->prepare_parser_for_regex_named_capture(
                         {
                             'regex' => qr/$parser_regex/,
                         },
@@ -1446,13 +1446,13 @@ sub initialize_parser_heuristic {
     );
 }
 
-=item initialize_formatter_for_arrayref()
+=item prepare_formatter_for_arrayref()
 
-Internal method called by L</"initialize_formatter()">.
+Internal method called by L</"prepare_formatter()">.
 
 =cut
 
-sub initialize_formatter_for_arrayref {
+sub prepare_formatter_for_arrayref {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -1498,13 +1498,13 @@ sub initialize_formatter_for_arrayref {
     );
 }
 
-=item initialize_formatter_for_hashref()
+=item prepare_formatter_for_hashref()
 
-Internal method called by L</"initialize_formatter()">.
+Internal method called by L</"prepare_formatter()">.
 
 =cut
 
-sub initialize_formatter_for_hashref {
+sub prepare_formatter_for_hashref {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -1517,7 +1517,7 @@ sub initialize_formatter_for_hashref {
     my $structure = $definition->{'structure'} // 'hashref';
     my $params = $definition->{'params'};
 
-    my @formatters = $self->initialize_formatter_for_arrayref(
+    my @formatters = $self->prepare_formatter_for_arrayref(
         {
             'structure' => 'arrayref',
             'params'    => $params,
@@ -1540,13 +1540,13 @@ sub initialize_formatter_for_hashref {
     return @formatters;
 }
 
-=item initialize_formatter_for_coderef()
+=item prepare_formatter_for_coderef()
 
-Internal method called by L</"initialize_formatter()">.
+Internal method called by L</"prepare_formatter()">.
 
 =cut
 
-sub initialize_formatter_for_coderef {
+sub prepare_formatter_for_coderef {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -1559,7 +1559,7 @@ sub initialize_formatter_for_coderef {
     my $coderef = $definition->{'coderef'};
     my $params = $definition->{'params'};
 
-    my @formatters = $self->initialize_formatter_for_arrayref(
+    my @formatters = $self->prepare_formatter_for_arrayref(
         {
             'structure' => 'array',
             'params'    => $params,
@@ -1572,13 +1572,13 @@ sub initialize_formatter_for_coderef {
     return @formatters;
 }
 
-=item initialize_formatter_for_sprintf()
+=item prepare_formatter_for_sprintf()
 
-Internal method called by L</"initialize_formatter()">.
+Internal method called by L</"prepare_formatter()">.
 
 =cut
 
-sub initialize_formatter_for_sprintf {
+sub prepare_formatter_for_sprintf {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -1624,13 +1624,13 @@ sub initialize_formatter_for_sprintf {
     );
 }
 
-=item initialize_formatter_for_strftime()
+=item prepare_formatter_for_strftime()
 
-Internal method called by L</"initialize_formatter()">.
+Internal method called by L</"prepare_formatter()">.
 
 =cut
 
-sub initialize_formatter_for_strftime {
+sub prepare_formatter_for_strftime {
     state $check = Type::Params::compile(
         Object,
         Dict[
@@ -1683,7 +1683,7 @@ sub initialize_formatter_for_strftime {
     }
 
     say "Crafted sprintf: $strftime -> $format [" . join(', ', @$params) . "]" if $self->{'debug'};
-    return $self->initialize_formatter_for_sprintf(
+    return $self->prepare_formatter_for_sprintf(
         {
             'sprintf' => $format,
             'params'  => $params,
@@ -1693,7 +1693,7 @@ sub initialize_formatter_for_strftime {
 
 =item strptime_token_to_regex()
 
-Internal method called by L</"initialize_parser()">.
+Internal method called by L</"prepare_parser()">.
 
 =cut
 
@@ -1728,7 +1728,7 @@ sub strptime_token_to_regex {
 
 =item strftime_token_to_internal
 
-Internal method called by L</"initialize_formatter()">.
+Internal method called by L</"prepare_formatter()">.
 
 =cut
 
@@ -1769,7 +1769,7 @@ sub strftime_token_to_internal {
 
 =item transform_token_value()
 
-Internal method called by L</"initialize_formatter()">.
+Internal method called by L</"prepare_formatter()">.
 
 =cut
 
@@ -1806,7 +1806,7 @@ sub transform_token_value {
 
 =item most_likely_token()
 
-Internal method called by L</"initialize_parser()">.
+Internal method called by L</"prepare_parser()">.
 
 =cut
 
@@ -1920,7 +1920,7 @@ sub parse_date {
 
     state $has_parser = ArrayRef[CodeRef];
     if (! $has_parser->($self->{'active_parsers'}) ) {
-        die "No parsers defined. Have you called initialize_parser()?";
+        die "No parsers defined. Have you called add_parser()?";
     }
 
     foreach my $parser (@{ $self->{'active_parsers'} }) {
@@ -1946,7 +1946,7 @@ sub format_date {
 
     state $has_formatter = ArrayRef[CodeRef];
     if (! $has_formatter->($self->{'active_formatters'}) ) {
-        die "No formatters defined. Have you called initialize_formatter()?";
+        die "No formatters defined. Have you called add_formatter()?";
     }
 
     my @formatted = ($date);
