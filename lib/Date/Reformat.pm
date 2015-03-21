@@ -848,7 +848,7 @@ current debug setting.
 Expects a true value to turn debugging on, and a false value
 to turn debugging off.
 
-    $reformat->debug(1);  # or 0
+    $reformat->debug(1);  # 1 or 0
 
 =cut
 
@@ -1879,6 +1879,17 @@ sub most_likely_token {
 
 =item add_parser()
 
+Adds a parser to the active parsers.  When parsing a date string,
+the parser will be called if each preceeding parser has failed to
+parse the date.
+
+See L</"prepare_parser()"> for generating a parser in the correct
+format.
+
+    $reformat->add_parser(
+        $reformat->prepare_parser( ... ),
+    );
+
 =cut
 
 sub add_parser {
@@ -1894,6 +1905,17 @@ sub add_parser {
 
 =item add_formatter()
 
+Adds a formatter to the active formatters.  When formatting a date,
+the formatter will be called after each preceeding formatter, receiving
+as input the output from the previous formatter.
+
+See L</"prepare_formatter()"> for generating a formatter in the correct
+format.
+
+    $reformat->add_formatter(
+        $reformat->prepare_formatter( ... ),
+    );
+
 =cut
 
 sub add_formatter {
@@ -1908,6 +1930,12 @@ sub add_formatter {
 }
 
 =item parse_date()
+
+Given a date string, attempts to parse it via the active parsers.
+Returns a hashref containing the tokens that were extracted
+from the date string.
+
+    my $date_hashref = $reformat->parse_date($date_string);
 
 =cut
 
@@ -1932,6 +1960,12 @@ sub parse_date {
 }
 
 =item format_date()
+
+Given a hashref containing the tokens that were extracted from a
+date string, formats the date using each of the active parsers,
+passing the output from the previous formatter to the next formatter.
+
+    my $date_string = $reformat->format_date($date_hashref);
 
 =cut
 
@@ -1958,6 +1992,11 @@ sub format_date {
 }
 
 =item reformat_date()
+
+Given a date string, attempts to parse it and format it using the
+active parsers and formaters.
+
+    my $date_string = $reformat->reformat_date($date_string);
 
 =cut
 
@@ -1986,7 +2025,7 @@ __END__
 
 =item Date::Transform
 
-=item Date::Parser
+=item Date::Parse
 
 =item Date::Format
 
