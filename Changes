@@ -1,5 +1,8 @@
 Revision history for Perl extension Date::Reformat.
 
+0.03  Sat Mar 21 22:27:49 2015
+	- Added documentation and parameter type checking.
+
 0.02  Sat Feb  7 22:03:10 2015
 	- Basic functionality in place.
 
