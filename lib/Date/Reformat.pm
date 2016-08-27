@@ -70,7 +70,7 @@ use warnings;
 use Types::Standard qw(ClassName Object Maybe Optional slurpy Dict HashRef ArrayRef RegexpRef CodeRef Enum Str Int);
 use Type::Params qw();
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 my $MONTH_LOOKUP = {
 };
