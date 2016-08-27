@@ -978,7 +978,7 @@ sub prepare_parser_for_strptime {
     # Replace expanded tokens: %{year}
     $format =~
         s/
-            %{(\w+)}
+            %\{(\w+)\}
         /
             $TOKENS->{$1} ? $TOKENS->{$1}->{'regex'} : "\%{$1}"
         /sgex;
@@ -1657,12 +1657,12 @@ sub prepare_formatter_for_strftime {
         /sgex;
 
     # Find all tokens.
-    my @tokens = $format =~ m/(%{\w+})/g;
+    my @tokens = $format =~ m/(%\{\w+\})/g;
 
     # Replace tokens in order, and build $params list.
     foreach my $token (@tokens) {
         # Replace expanded tokens: %{year}
-        if ($token =~ m/%{(\w+)}/) {
+        if ($token =~ m/%\{(\w+)\}/) {
             my $internal = $1;
             my $sprintf = $TOKENS->{$internal}->{'sprintf'} //
                 die "Unable to find sprintf definition for token '$internal'";
