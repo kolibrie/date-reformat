@@ -73,10 +73,12 @@ sub csv_iterator {
     else {
         $fh->fdopen(fileno(STDIN), 'r') || die "Failed to read from STDIN: $!\n";
     }
-    my $csv_in = Text::CSV->new();
+    my $csv_in = Text::CSV->new({ binary => 1 });
     my $columns = $csv_in->getline($fh);
     $csv_in->column_names(@$columns);
-    my $csv_out = Text::CSV->new();
+    my $csv_out = Text::CSV->new({ binary => 1 });
+    $csv_out->combine(@$columns);
+    print $csv_out->string() . "\n";
     return (
         # Input.
         sub {
